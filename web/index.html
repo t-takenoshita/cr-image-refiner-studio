@@ -99,15 +99,20 @@
     <form method="dialog" id="github-token-form">
       <p class="mono-label">PRIVATE CONNECTION</p>
       <h2>GitHub Actionsに接続</h2>
-      <p>Fine-grained tokenとサイトパスワードをこのタブだけに保存します。依頼文はサイトパスワードで暗号化してからActionsへ送ります。</p>
+      <p>Fine-grained tokenをサイトパスワードで暗号化し、このブラウザのIndexedDBへ保存します。依頼文も暗号化してからActionsへ送ります。</p>
       <div class="field"><label for="github-token">GitHub token <span class="required-mark">＊</span></label><input id="github-token" type="password" autocomplete="off" required placeholder="github_pat_..."></div>
       <div class="field"><label for="site-password">サイトパスワード <span class="required-mark">＊</span></label><input id="site-password" type="password" autocomplete="off" required placeholder="Repository secretのSITE_PASSWORDと同じ値"></div>
       <p class="form-message" id="github-token-error" role="alert"></p>
       <div class="dialog-actions"><button class="button button-secondary" id="cancel-github-token" type="button">キャンセル</button><button class="button button-primary" id="save-github-token" type="submit">接続する</button></div>
-      <small>どちらもsessionStorageにのみ入り、タブを閉じると消えます。tokenには対象リポジトリのActions / Contents読み書き権限が必要です。</small>
+      <div class="dialog-vault-actions">
+        <button class="button button-secondary" id="export-github-token" type="button">接続ファイルを書き出す</button>
+        <label class="button button-secondary" for="import-github-token">接続ファイルを読み込む<input id="import-github-token" type="file" accept="application/json,.json" hidden></label>
+        <button class="button button-secondary danger-button" id="delete-github-token" type="button">保存済みTokenを削除</button>
+      </div>
+      <small>Tokenは暗号化済みで保存されます。別端末へ移す場合は接続ファイルを使えます。tokenには対象リポジトリのActions / Contents読み書き権限が必要です。</small>
     </form>
   </dialog>
   <script type="module" src="./pages-auth.js?v=1"></script>
-  <script type="module" src="./app.js?v=6"></script>
+  <script type="module" src="./app.js?v=7"></script>
 </body>
 </html>

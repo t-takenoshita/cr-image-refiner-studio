@@ -184,6 +184,9 @@ h3 { margin-block-end: var(--space-xs); font-size: var(--text-md); }
 .connection-dialog p:not(.mono-label) { color: var(--color-muted); }
 .connection-dialog small { display: block; margin-block-start: var(--space-md); color: var(--color-muted); }
 .dialog-actions { display: flex; justify-content: flex-end; gap: var(--space-xs); }
+.dialog-vault-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-xs); margin-block-start: var(--space-md); padding-block-start: var(--space-md); border-block-start: var(--rule-thin) solid var(--color-rule); }
+.dialog-vault-actions .button { width: 100%; min-height: 2.7rem; justify-content: center; text-align: center; }
+.dialog-vault-actions .danger-button { grid-column: 1 / -1; }
 
 @media (hover: hover) and (pointer: fine) {
   .nav-item:hover, .button-secondary:hover { background: var(--color-paper-2); }

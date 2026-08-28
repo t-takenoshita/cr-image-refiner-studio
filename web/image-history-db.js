@@ -1,7 +1,8 @@
 const DATABASE_NAME = "cr-image-refiner";
-const DATABASE_VERSION = 2;
+const DATABASE_VERSION = 3;
 const STORE_NAME = "imageHistory";
 const TEMPLATE_STORE_NAME = "templates";
+const SECURE_SETTINGS_STORE_NAME = "secureSettings";
 
 let databasePromise;
 
@@ -113,6 +114,29 @@ export async function migrateLocalStorageTemplates(entries) {
   return migrated;
 }
 
+export async function saveSecureSetting(entry) {
+  const database = await openDatabase();
+  const transaction = database.transaction(SECURE_SETTINGS_STORE_NAME, "readwrite");
+  transaction.objectStore(SECURE_SETTINGS_STORE_NAME).put(entry);
+  await transactionDone(transaction);
+}
+
+export async function readSecureSetting(id) {
+  const database = await openDatabase();
+  const transaction = database.transaction(SECURE_SETTINGS_STORE_NAME, "readonly");
+  const request = transaction.objectStore(SECURE_SETTINGS_STORE_NAME).get(id);
+  const result = await requestResult(request);
+  await transactionDone(transaction);
+  return result || null;
+}
+
+export async function deleteSecureSetting(id) {
+  const database = await openDatabase();
+  const transaction = database.transaction(SECURE_SETTINGS_STORE_NAME, "readwrite");
+  transaction.objectStore(SECURE_SETTINGS_STORE_NAME).delete(id);
+  await transactionDone(transaction);
+}
+
 async function listHistoryEntries() {
   return listStoreEntries(STORE_NAME);
 }
@@ -141,6 +165,9 @@ function openDatabase() {
         const store = database.createObjectStore(TEMPLATE_STORE_NAME, { keyPath: "id" });
         store.createIndex("expiresAt", "expiresAt", { unique: false });
         store.createIndex("createdAt", "createdAt", { unique: false });
+      }
+      if (!database.objectStoreNames.contains(SECURE_SETTINGS_STORE_NAME)) {
+        database.createObjectStore(SECURE_SETTINGS_STORE_NAME, { keyPath: "id" });
       }
     };
     request.onsuccess = () => {

@@ -42,10 +42,12 @@ npm run dev
 1. GitHubの **Settings → Pages → Build and deployment** で Source を **GitHub Actions** にします。
 2. `main` へpushすると `.github/workflows/deploy-pages.yml` が静的UIを公開します。
 3. Pagesを開いたら、Repository secret `SITE_PASSWORD` と同じ共有パスワードでログインします。
-4. 初めて生成するときだけ、Fine-grained personal access tokenを入力します。
+4. 各利用者が初めて生成するときだけ、自分のFine-grained personal access tokenを入力します。
 5. tokenは対象リポジトリだけを選び、**Actions: Read and write** と **Contents: Read and write** を付けます。
 
-デプロイ時に `SITE_PASSWORD` から一方向の照合データを生成するため、パスワードの生値はPagesへ配信されません。tokenとサイトパスワードはブラウザの `sessionStorage` にだけ保存され、タブを閉じると消えます。依頼文はAES-GCMで暗号化されてから `.github/workflows/generate-pages.yml` へ送られ、Action内だけで復号されます。画面はqueued / generating / completedをポーリング表示します。
+デプロイ時に `SITE_PASSWORD` から一方向の照合データを生成するため、パスワードの生値はPagesへ配信されません。tokenはサイトパスワードから導出した鍵でAES-GCM暗号化し、各ブラウザのIndexedDBへ保存します。復号したtokenとサイトパスワードはタブの `sessionStorage` だけに保持します。依頼文もAES-GCMで暗号化されてから `.github/workflows/generate-pages.yml` へ送られ、Action内だけで復号されます。画面はqueued / generating / completedをポーリング表示します。
+
+GitHub接続画面から暗号化済み接続ファイルを書き出し、同じ利用者の別端末へ読み込めます。接続ファイルにはtokenの生値は入りませんが、サイトパスワードを知る人は復号できるため安全な方法で受け渡してください。複数利用者で1つのtokenを共有せず、各自のtokenを登録してください。
 
 ### 一時画像の扱い
 
@@ -62,6 +64,7 @@ Pagesのパスワード画面は静的サイト上のクライアント側ゲー
 - ローカル生成画像: `.runtime/generated/`
 - ローカル履歴・テンプレート: ブラウザのIndexedDB
 - ローカルAPIキー・サイトパスワード: `.env`
+- Pages利用者のGitHub token: 各ブラウザのIndexedDB（AES-GCM暗号化）
 - Pages一時画像: GitHub Draft Release（12時間で削除）
 
 `.runtime/`、`.env`、`node_modules/` はGit管理対象外です。

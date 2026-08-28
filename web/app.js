@@ -1,11 +1,15 @@
 import {
   clearSitePassword,
   clearGithubToken,
+  deleteEncryptedGithubToken,
   dispatchPagesGeneration,
+  exportEncryptedGithubToken,
+  importEncryptedGithubToken,
   isPagesMode,
   readGithubToken,
   readSitePassword,
-  saveGithubToken,
+  restoreEncryptedGithubToken,
+  saveEncryptedGithubToken,
   saveSitePassword,
   validateGithubToken,
   waitForPagesGeneration
@@ -343,8 +347,12 @@ function remainingTime(expiresAt) {
 }
 
 async function requireGithubCredentials() {
-  const existing = readGithubToken();
   const existingPassword = readSitePassword();
+  let existing = readGithubToken();
+  if (!existing && existingPassword) {
+    try { existing = await restoreEncryptedGithubToken(existingPassword); }
+    catch { clearGithubToken(); }
+  }
   if (existing && existingPassword) return { token: existing, sitePassword: existingPassword };
   if (pendingTokenRequest) return pendingTokenRequest.promise;
 
@@ -356,16 +364,19 @@ async function requireGithubCredentials() {
   });
   pendingTokenRequest = { promise, resolve: resolveRequest, reject: rejectRequest };
   $("#github-token").value = "";
+  $("#github-token").required = true;
+  $("#github-token").placeholder = "github_pat_...";
   $("#site-password").value = existingPassword;
   $("#site-password").closest(".field").hidden = Boolean(PAGES_MODE && existingPassword);
   $("#github-token-error").textContent = "";
+  $("#save-github-token").textContent = "接続して保存";
   $("#github-token-dialog").showModal();
   return promise;
 }
 
 async function submitGithubToken(event) {
   event.preventDefault();
-  const token = $("#github-token").value.trim();
+  const token = $("#github-token").value.trim() || readGithubToken();
   const sitePassword = $("#site-password").value || readSitePassword();
   const button = $("#save-github-token");
   const error = $("#github-token-error");
@@ -375,7 +386,7 @@ async function submitGithubToken(event) {
   try {
     await validateGithubToken(token);
     if (!sitePassword) throw new Error("サイトパスワードを入力してください。");
-    saveGithubToken(token);
+    await saveEncryptedGithubToken(token, sitePassword);
     saveSitePassword(sitePassword);
     $("#github-token-dialog").close();
     pendingTokenRequest?.resolve({ token, sitePassword });
@@ -385,7 +396,7 @@ async function submitGithubToken(event) {
     error.textContent = cause.message;
   } finally {
     button.disabled = false;
-    button.textContent = "接続する";
+    button.textContent = "接続して保存";
   }
 }
 
@@ -405,12 +416,73 @@ function updateConnectionUi() {
 }
 
 async function toggleGithubConnection() {
-  if (readGithubToken()) {
-    clearGithubToken();
-    updateConnectionUi();
-    return;
+  const password = readSitePassword();
+  if (!readGithubToken() && password) {
+    try { await restoreEncryptedGithubToken(password); } catch {}
   }
-  try { await requireGithubCredentials(); } catch {}
+  const connected = Boolean(readGithubToken());
+  $("#github-token").value = "";
+  $("#github-token").required = !connected;
+  $("#github-token").placeholder = connected ? "更新する場合だけ新しいtokenを入力" : "github_pat_...";
+  $("#site-password").value = password;
+  $("#site-password").closest(".field").hidden = Boolean(PAGES_MODE && password);
+  $("#github-token-error").textContent = "";
+  $("#save-github-token").textContent = connected ? "接続情報を更新" : "接続して保存";
+  $("#github-token-dialog").showModal();
+}
+
+async function exportGithubConnection() {
+  const error = $("#github-token-error");
+  try {
+    const payload = await exportEncryptedGithubToken();
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "cr-image-refiner-connection.json";
+    link.click();
+    URL.revokeObjectURL(url);
+    error.textContent = "暗号化済み接続ファイルを書き出しました。";
+  } catch (cause) {
+    error.textContent = cause.message;
+  }
+}
+
+async function importGithubConnection(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  const error = $("#github-token-error");
+  try {
+    const password = readSitePassword() || $("#site-password").value;
+    if (!password) throw new Error("先にサイトパスワードを入力してください。");
+    const payload = JSON.parse(await file.text());
+    await importEncryptedGithubToken(payload, password);
+    saveSitePassword(password);
+    updateConnectionUi();
+    $("#github-token-dialog").close();
+    pendingTokenRequest?.resolve({ token: readGithubToken(), sitePassword: password });
+    pendingTokenRequest = null;
+  } catch (cause) {
+    error.textContent = cause.message || "接続ファイルを読み込めませんでした。";
+  } finally {
+    event.target.value = "";
+  }
+}
+
+async function deleteGithubConnection() {
+  if (!window.confirm("このブラウザに保存したGitHub tokenを削除しますか？")) return;
+  await deleteEncryptedGithubToken();
+  $("#github-token-dialog").close();
+  pendingTokenRequest?.reject(new DOMException("GitHub接続が削除されました。", "AbortError"));
+  pendingTokenRequest = null;
+  updateConnectionUi();
+}
+
+async function restoreGithubConnection() {
+  if (!PAGES_MODE || !readSitePassword()) return;
+  try { await restoreEncryptedGithubToken(readSitePassword()); }
+  catch (cause) { console.warn("[GitHub connection]", cause.message); }
+  updateConnectionUi();
 }
 
 function initializeMode() {
@@ -562,6 +634,9 @@ function bindEvents() {
   $("#github-connect").addEventListener("click", toggleGithubConnection);
   $("#github-token-form").addEventListener("submit", submitGithubToken);
   $("#cancel-github-token").addEventListener("click", cancelGithubToken);
+  $("#export-github-token").addEventListener("click", exportGithubConnection);
+  $("#import-github-token").addEventListener("change", importGithubConnection);
+  $("#delete-github-token").addEventListener("click", deleteGithubConnection);
   $(".logout-form").addEventListener("submit", (event) => {
     if (!PAGES_MODE) return;
     event.preventDefault();
@@ -590,6 +665,8 @@ async function initializeBrowserDatabase() {
 initializeMode();
 bindEvents();
 initializeBrowserDatabase().catch((cause) => console.error("[IndexedDB]", cause.message));
+window.addEventListener("crir:pages-authenticated", () => void restoreGithubConnection());
+void restoreGithubConnection();
 setInterval(async () => {
   await listActiveHistory();
   await listActiveTemplates();

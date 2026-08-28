@@ -1,3 +1,9 @@
+import {
+  deleteSecureSetting,
+  readSecureSetting,
+  saveSecureSetting
+} from "./image-history-db.js";
+
 const CONFIG = Object.freeze({
   owner: "t-takenoshitatakumi",
   repo: "cr-image-refiner-studio",
@@ -8,6 +14,8 @@ const CONFIG = Object.freeze({
 
 const TOKEN_KEY = "crir_github_token";
 const PASSWORD_KEY = "crir_site_password";
+const TOKEN_VAULT_ID = "github-token-v1";
+const TOKEN_VAULT_ITERATIONS = 310_000;
 
 export function isPagesMode() {
   return window.location.hostname.endsWith(".github.io")
@@ -24,6 +32,54 @@ export function saveGithubToken(token) {
 
 export function clearGithubToken() {
   sessionStorage.removeItem(TOKEN_KEY);
+}
+
+export async function saveEncryptedGithubToken(token, password) {
+  const normalized = String(token || "").trim();
+  if (!normalized) throw new Error("GitHub tokenを入力してください。");
+  if (!password) throw new Error("サイトパスワードが必要です。");
+  const vault = await encryptSecret(normalized, password);
+  await saveSecureSetting({ id: TOKEN_VAULT_ID, vault, updatedAt: Date.now() });
+  saveGithubToken(normalized);
+  return vault;
+}
+
+export async function restoreEncryptedGithubToken(password) {
+  const current = readGithubToken();
+  if (current) return current;
+  if (!password) return "";
+  const entry = await readSecureSetting(TOKEN_VAULT_ID);
+  if (!entry?.vault) return "";
+  const token = await decryptSecret(entry.vault, password);
+  saveGithubToken(token);
+  return token;
+}
+
+export async function deleteEncryptedGithubToken() {
+  clearGithubToken();
+  await deleteSecureSetting(TOKEN_VAULT_ID);
+}
+
+export async function exportEncryptedGithubToken() {
+  const entry = await readSecureSetting(TOKEN_VAULT_ID);
+  if (!entry?.vault) throw new Error("保存済みのGitHub tokenがありません。");
+  return {
+    format: "crir-github-connection",
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    vault: entry.vault
+  };
+}
+
+export async function importEncryptedGithubToken(payload, password) {
+  if (payload?.format !== "crir-github-connection" || payload?.version !== 1 || !payload?.vault) {
+    throw new Error("CR Image Refinerの接続ファイルではありません。");
+  }
+  const token = await decryptSecret(payload.vault, password);
+  await validateGithubToken(token);
+  await saveSecureSetting({ id: TOKEN_VAULT_ID, vault: payload.vault, updatedAt: Date.now() });
+  saveGithubToken(token);
+  return token;
 }
 
 export function readSitePassword() {
@@ -126,6 +182,72 @@ function bytesToBase64(bytes) {
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
   return btoa(binary);
+}
+
+async function encryptSecret(secret, password) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await deriveVaultKey(password, salt, ["encrypt"]);
+  const encrypted = new Uint8Array(await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv },
+    key,
+    new TextEncoder().encode(secret)
+  ));
+  return {
+    version: 1,
+    algorithm: "AES-GCM",
+    kdf: "PBKDF2-SHA256",
+    iterations: TOKEN_VAULT_ITERATIONS,
+    salt: bytesToBase64(salt),
+    iv: bytesToBase64(iv),
+    data: bytesToBase64(encrypted)
+  };
+}
+
+async function decryptSecret(vault, password) {
+  try {
+    if (
+      vault?.version !== 1
+      || vault.algorithm !== "AES-GCM"
+      || vault.kdf !== "PBKDF2-SHA256"
+      || vault.iterations !== TOKEN_VAULT_ITERATIONS
+    ) throw new Error("invalid vault");
+    const salt = base64ToBytes(vault.salt);
+    const iv = base64ToBytes(vault.iv);
+    const key = await deriveVaultKey(password, salt, ["decrypt"]);
+    const decrypted = await crypto.subtle.decrypt(
+      { name: "AES-GCM", iv },
+      key,
+      base64ToBytes(vault.data)
+    );
+    const token = new TextDecoder().decode(decrypted).trim();
+    if (!token) throw new Error("empty token");
+    return token;
+  } catch {
+    throw new Error("接続情報を復号できません。サイトパスワードまたは接続ファイルを確認してください。");
+  }
+}
+
+async function deriveVaultKey(password, salt, usages) {
+  const material = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(password),
+    "PBKDF2",
+    false,
+    ["deriveKey"]
+  );
+  return crypto.subtle.deriveKey(
+    { name: "PBKDF2", hash: "SHA-256", salt, iterations: TOKEN_VAULT_ITERATIONS },
+    material,
+    { name: "AES-GCM", length: 256 },
+    false,
+    usages
+  );
+}
+
+function base64ToBytes(value) {
+  const binary = atob(String(value || ""));
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
 }
 
 export async function waitForPagesGeneration({ token, job, signal, onStatus = () => {} }) {
