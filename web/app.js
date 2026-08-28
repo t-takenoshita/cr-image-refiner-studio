@@ -13,7 +13,7 @@ import {
   saveSitePassword,
   validateGithubToken,
   waitForPagesGeneration
-} from "./github-pages.js";
+} from "./github-pages.js?v=2";
 import {
   clearHistoryEntries,
   deleteHistoryEntries,
