@@ -2,8 +2,7 @@ import http from "node:http";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { normalizeRequestRow } from "./request_schema.mjs";
-import { buildPromptPack } from "./prompt_builder.mjs";
+import { buildWebPlan } from "./web_plan.mjs";
 import { generateImage2File } from "./image2_api.mjs";
 import {
   clearSessionCookie,
@@ -145,43 +144,6 @@ async function handleLogin(request, response, pathname) {
   }
 
   return false;
-}
-
-function requestRowFromWeb(body = {}) {
-  return {
-    タイムスタンプ: new Date().toISOString(),
-    依頼者名: body.requester || "Webユーザー",
-    案件名: body.projectName || body.articleTitle || "Web画像制作",
-    商材: body.product || body.articleTitle || "記事内商材",
-    媒体: body.media || "記事LP",
-    ターゲット: body.targetAudience || "記事を閲覧する見込みユーザー",
-    インサイト: body.problem || body.audienceInsight || "",
-    訴求軸: body.appeal || body.direction || "依頼内容に沿った訴求",
-    オファー: body.offer || "",
-    必須コピー: body.requiredCopy || "",
-    希望テイスト: body.tone || body.direction || "清潔感、信頼感、スマホで見やすい",
-    入れたいビジュアル要素: body.visualElements || "",
-    "LP URL": body.landingPageUrl || "",
-    "NG表現": body.ngExpressions || "",
-    備考: body.notes || "Web完結型CR Image Refinerからの依頼"
-  };
-}
-
-async function buildWebPlan(body) {
-  const request = normalizeRequestRow(requestRowFromWeb(body), { sourceKind: "web" });
-  const promptPack = await buildPromptPack(request, { now: new Date() });
-  return {
-    requestId: request.request_id,
-    warnings: request.validation.warnings,
-    summary: promptPack.request_summary,
-    variants: promptPack.variants.map((variant) => ({
-      id: variant.variant_id,
-      index: variant.variant_index,
-      prompt: variant.prompt,
-      tags: variant.generation_tags,
-      textContract: variant.text_contract
-    }))
-  };
 }
 
 async function generateOne({ prompt, references, apiKey, index = 1 }) {

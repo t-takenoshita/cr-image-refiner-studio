@@ -1,0 +1,70 @@
+name: Generate image for Pages
+run-name: Generate ${{ inputs.request_id }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      request_id:
+        description: Browser request ID
+        required: true
+        type: string
+      mode:
+        description: article or free
+        required: true
+        type: choice
+        options:
+          - article
+          - free
+      payload:
+        description: JSON generation request
+        required: true
+        type: string
+      release_id:
+        description: Draft release used as temporary storage
+        required: true
+        type: string
+      reference_assets:
+        description: JSON array of temporary reference asset names
+        required: false
+        default: "[]"
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: image-generation-${{ inputs.request_id }}
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Restrict execution to repository owner
+        env:
+          REQUEST_ACTOR: ${{ github.actor }}
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+        run: |
+          if [ "$REQUEST_ACTOR" != "$REPOSITORY_OWNER" ]; then
+            echo "Only the repository owner can generate images."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Generate and upload temporary results
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SITE_PASSWORD: ${{ secrets.SITE_PASSWORD }}
+          INPUT_REQUEST_ID: ${{ inputs.request_id }}
+          INPUT_MODE: ${{ inputs.mode }}
+          INPUT_PAYLOAD: ${{ inputs.payload }}
+          INPUT_RELEASE_ID: ${{ inputs.release_id }}
+          INPUT_REFERENCE_ASSETS: ${{ inputs.reference_assets }}
+        run: node scripts/github_pages_job.mjs

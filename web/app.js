@@ -1,8 +1,23 @@
+import {
+  clearSitePassword,
+  clearGithubToken,
+  dispatchPagesGeneration,
+  isPagesMode,
+  readGithubToken,
+  readSitePassword,
+  saveGithubToken,
+  saveSitePassword,
+  validateGithubToken,
+  waitForPagesGeneration
+} from "./github-pages.js";
+
 const STORAGE = {
   templates: "crir_templates_v2",
   history: "crir_history_v2"
 };
 const FIFTEEN_DAYS = 15 * 24 * 60 * 60 * 1000;
+const HISTORY_TTL = 12 * 60 * 60 * 1000;
+const PAGES_MODE = isPagesMode();
 
 const state = {
   view: "article",
@@ -14,8 +29,11 @@ const state = {
   plan: null,
   images: [],
   selected: -1,
-  generating: false
+  selectedHistoryIds: new Set(),
+  generating: false,
+  generationController: null
 };
+let pendingTokenRequest = null;
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -24,7 +42,14 @@ function getStored(key, fallback) {
   try { return JSON.parse(localStorage.getItem(key)) ?? fallback; }
   catch { return fallback; }
 }
-function setStored(key, value) { localStorage.setItem(key, JSON.stringify(value)); }
+function trySetStored(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+    return true;
+  } catch {
+    return false;
+  }
+}
 function escapeHtml(value = "") {
   return String(value).replace(/[&<>"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[char]));
 }
@@ -80,7 +105,8 @@ function getFormData() {
     requiredCopy: data.requiredCopy?.trim(),
     offer: data.offer?.trim(),
     tone: data.direction?.trim(),
-    visualElements: data.problem?.trim()
+    visualElements: data.problem?.trim(),
+    submittedAt: state.form.submittedAt || new Date().toISOString()
   };
 }
 
@@ -88,11 +114,28 @@ async function api(path, options = {}) {
   const response = await fetch(path, options);
   const payload = await response.json().catch(() => ({}));
   if (response.status === 401 && payload.loginRequired) {
-    window.location.assign("/login");
+    window.location.assign("./login");
     throw new Error("ログインが必要です。");
   }
   if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
   return payload;
+}
+
+function browserPlan() {
+  const variants = [
+    ["直球訴求", "指定内容をそのまま主役にする構成"],
+    ["利用シーン", "自然な生活・利用場面として見せる構成"],
+    ["クローズアップ", "人物や商品のディテールを大きく見せる構成"],
+    ["エディトリアル", "情報を整理した編集的なレイアウト"]
+  ];
+  return {
+    requestId: crypto.randomUUID(),
+    variants: variants.map(([name, description], index) => ({
+      id: `browser-v${index + 1}`,
+      index: index + 1,
+      tags: { color_palette_name: name, design_tone_hint: description }
+    }))
+  };
 }
 
 function renderPlan() {
@@ -122,11 +165,13 @@ async function planArticle(event) {
   button.disabled = true;
   button.textContent = "AI要件を整理中…";
   try {
-    state.plan = await api("/api/plan", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(state.form)
-    });
+    state.plan = PAGES_MODE
+      ? browserPlan()
+      : await api("/api/plan", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(state.form)
+        });
     renderPlan();
     goStage(2);
   } catch (cause) {
@@ -137,37 +182,75 @@ async function planArticle(event) {
   }
 }
 
+function updateGenerationStatus(message, progress = 15) {
+  $("#generation-status").textContent = message;
+  const bar = $("#generation-progress");
+  bar.classList.add("is-determinate");
+  bar.style.setProperty("--progress", String(Math.max(0.05, Math.min(1, progress / 100))));
+}
+
+async function runPagesJob(mode, payload, references, onStatus) {
+  const { token, sitePassword } = await requireGithubCredentials();
+  const job = await dispatchPagesGeneration({ token, sitePassword, mode, payload, references });
+  return waitForPagesGeneration({
+    token,
+    job,
+    signal: state.generationController?.signal,
+    onStatus
+  });
+}
+
 async function generateArticle() {
   try {
     state.generating = true;
+    state.generationController = new AbortController();
     goStage(4);
     const comment = $("#marketer-comment").value.trim();
-    const images = [];
-    for (let index = 0; index < state.plan.variants.length; index += 1) {
-      if (!state.generating) return;
-      $("#generation-progress").style.width = `${12 + index * 22}%`;
-      const variant = state.plan.variants[index];
-      const result = await api("/api/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: `${variant.prompt}${comment ? `\n追加コメント: ${comment}` : ""}`, references: [state.articleImage, ...state.references].filter(Boolean), count: 1 })
-      });
-      images.push(result.images[0]);
+    let images;
+
+    if (PAGES_MODE) {
+      updateGenerationStatus("参考画像をGitHubへ一時送信しています…", 10);
+      const result = await runPagesJob(
+        "article",
+        { form: state.form, comment },
+        [state.articleImage, ...state.references].filter(Boolean),
+        ({ message, progress }) => updateGenerationStatus(message, progress)
+      );
+      images = result.images;
+    } else {
+      images = [];
+      for (let index = 0; index < state.plan.variants.length; index += 1) {
+        if (!state.generating) return;
+        updateGenerationStatus(`構図案 ${index + 1}/4 を生成しています…`, 12 + index * 22);
+        const variant = state.plan.variants[index];
+        const result = await api("/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            prompt: `${variant.prompt}${comment ? `\n追加コメント: ${comment}` : ""}`,
+            references: [state.articleImage, ...state.references].filter(Boolean),
+            count: 1
+          })
+        });
+        images.push(result.images[0]);
+      }
     }
+
     state.images = images;
     state.selected = -1;
     renderArticleImages();
     goStage(5);
   } catch (cause) {
-    alert(cause.message);
+    if (cause.name !== "AbortError") alert(cause.message);
     goStage(3);
   } finally {
     state.generating = false;
+    state.generationController = null;
   }
 }
 
 function renderArticleImages() {
-  $("#article-results").innerHTML = state.images.map((image, index) => `<article class="image-card" data-image-index="${index}" tabindex="0" role="button" aria-pressed="${index === state.selected}"><img src="${image.dataUrl}" alt="生成案 ${index + 1}"><footer><strong>生成案 ${index + 1}</strong><span>${index === state.selected ? "✓ 選択中" : "選択"}</span></footer></article>`).join("");
+  $("#article-results").innerHTML = state.images.map((image, index) => `<article class="image-card ${index === state.selected ? "is-selected" : ""}" data-image-index="${index}" tabindex="0" role="button" aria-pressed="${index === state.selected}"><img src="${image.dataUrl}" alt="生成案 ${index + 1}"><footer><strong>生成案 ${index + 1}</strong><span>${index === state.selected ? "✓ 選択中" : "選択"}</span></footer></article>`).join("");
   $("#confirm-selection").disabled = state.selected < 0;
 }
 
@@ -185,20 +268,169 @@ function confirmSelection() {
 }
 
 function saveHistory(image) {
-  const history = getStored(STORAGE.history, []);
-  history.unshift({ id: image.id, dataUrl: image.dataUrl, title: state.form.articleTitle || "生成画像", createdAt: Date.now() });
-  setStored(STORAGE.history, history.slice(0, 20));
+  const now = Date.now();
+  const entry = {
+    id: image.id || crypto.randomUUID(),
+    dataUrl: image.dataUrl,
+    title: state.form.articleTitle || "生成画像",
+    createdAt: now,
+    expiresAt: now + HISTORY_TTL
+  };
+  const history = [entry, ...activeHistory().filter((item) => item.id !== entry.id)].slice(0, 20);
+  while (history.length && !storeHistory(history)) history.pop();
+  if (!history.length) alert("ブラウザの保存容量が不足しているため、履歴へ保存できませんでした。");
 }
 
 function renderHistory() {
-  const history = getStored(STORAGE.history, []);
-  $("#history-grid").innerHTML = history.length ? history.map((item) => `<article class="history-card"><img src="${item.dataUrl}" alt="${escapeHtml(item.title)}"><div><h3>${escapeHtml(item.title)}</h3><p>${new Date(item.createdAt).toLocaleString("ja-JP")}</p><a class="button button-secondary" href="${item.dataUrl}" download="${escapeHtml(item.title)}.png">保存</a></div></article>`).join("") : `<div class="empty-canvas"><span>◷</span><h2>履歴はまだありません</h2><p>採用候補を確定するとここに保存されます。</p></div>`;
+  const history = activeHistory();
+  $("#history-storage-size").textContent = `画像データ ${formatBytes(historyStorageBytes())} · 12時間保存`;
+  $("#delete-selected-history").disabled = state.selectedHistoryIds.size === 0;
+  $("#clear-history").disabled = history.length === 0;
+  $("#history-grid").innerHTML = history.length ? history.map((item) => {
+    const selected = state.selectedHistoryIds.has(item.id);
+    return `<article class="history-card ${selected ? "is-selected" : ""}"><label class="history-select"><input type="checkbox" data-history-select="${escapeHtml(item.id)}" ${selected ? "checked" : ""}><span>削除対象に選択</span></label><img src="${item.dataUrl}" alt="${escapeHtml(item.title)}"><div><h3>${escapeHtml(item.title)}</h3><p>${new Date(item.createdAt).toLocaleString("ja-JP")} · ${remainingTime(item.expiresAt || item.createdAt + HISTORY_TTL)}</p><a class="button button-secondary" href="${item.dataUrl}" download="${escapeHtml(item.title)}.png">保存</a></div></article>`;
+  }).join("") : `<div class="empty-canvas"><span>◷</span><h2>履歴はまだありません</h2><p>採用候補を確定すると12時間だけ保存されます。</p></div>`;
+}
+
+function activeHistory() {
+  const now = Date.now();
+  const original = getStored(STORAGE.history, []);
+  const history = original.filter((item) => Number(item.expiresAt || item.createdAt + HISTORY_TTL) > now);
+  const activeIds = new Set(history.map((item) => item.id));
+  state.selectedHistoryIds = new Set([...state.selectedHistoryIds].filter((id) => activeIds.has(id)));
+  if (history.length !== original.length) storeHistory(history);
+  return history;
+}
+
+function storeHistory(history) {
+  if (!history.length) {
+    localStorage.removeItem(STORAGE.history);
+    return true;
+  }
+  return trySetStored(STORAGE.history, history);
+}
+
+function deleteSelectedHistory() {
+  if (!state.selectedHistoryIds.size) return;
+  const history = activeHistory().filter((item) => !state.selectedHistoryIds.has(item.id));
+  storeHistory(history);
+  state.selectedHistoryIds.clear();
+  renderHistory();
+}
+
+function clearHistory() {
+  if (!activeHistory().length) return;
+  if (!window.confirm("ブラウザに保存した画像履歴をすべて削除しますか？")) return;
+  localStorage.removeItem(STORAGE.history);
+  state.selectedHistoryIds.clear();
+  renderHistory();
+}
+
+function historyStorageBytes() {
+  return new Blob([localStorage.getItem(STORAGE.history) || ""]).size;
+}
+
+function formatBytes(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
+}
+
+function remainingTime(expiresAt) {
+  const hours = Math.max(0, Math.ceil((Number(expiresAt) - Date.now()) / (60 * 60 * 1000)));
+  return `残り約${hours}時間`;
+}
+
+async function requireGithubCredentials() {
+  const existing = readGithubToken();
+  const existingPassword = readSitePassword();
+  if (existing && existingPassword) return { token: existing, sitePassword: existingPassword };
+  if (pendingTokenRequest) return pendingTokenRequest.promise;
+
+  let resolveRequest;
+  let rejectRequest;
+  const promise = new Promise((resolve, reject) => {
+    resolveRequest = resolve;
+    rejectRequest = reject;
+  });
+  pendingTokenRequest = { promise, resolve: resolveRequest, reject: rejectRequest };
+  $("#github-token").value = "";
+  $("#site-password").value = "";
+  $("#github-token-error").textContent = "";
+  $("#github-token-dialog").showModal();
+  return promise;
+}
+
+async function submitGithubToken(event) {
+  event.preventDefault();
+  const token = $("#github-token").value.trim();
+  const sitePassword = $("#site-password").value;
+  const button = $("#save-github-token");
+  const error = $("#github-token-error");
+  error.textContent = "";
+  button.disabled = true;
+  button.textContent = "確認中…";
+  try {
+    await validateGithubToken(token);
+    if (!sitePassword) throw new Error("サイトパスワードを入力してください。");
+    saveGithubToken(token);
+    saveSitePassword(sitePassword);
+    $("#github-token-dialog").close();
+    pendingTokenRequest?.resolve({ token, sitePassword });
+    pendingTokenRequest = null;
+    updateConnectionUi();
+  } catch (cause) {
+    error.textContent = cause.message;
+  } finally {
+    button.disabled = false;
+    button.textContent = "接続する";
+  }
+}
+
+function cancelGithubToken() {
+  $("#github-token-dialog").close();
+  pendingTokenRequest?.reject(new DOMException("GitHub接続がキャンセルされました。", "AbortError"));
+  pendingTokenRequest = null;
+}
+
+function updateConnectionUi() {
+  if (!PAGES_MODE) return;
+  const connected = Boolean(readGithubToken() && readSitePassword());
+  $("#github-connect").classList.toggle("is-connected", connected);
+  $("#github-connect-label").textContent = connected ? "GitHub接続済み" : "GitHub接続";
+  $("#runtime-status .status-dot").classList.toggle("is-waiting", !connected);
+  $("#runtime-status small").textContent = connected ? "Actionsバックグラウンド生成" : "初回のみGitHub接続が必要";
+}
+
+async function toggleGithubConnection() {
+  if (readGithubToken()) {
+    clearGithubToken();
+    clearSitePassword();
+    updateConnectionUi();
+    return;
+  }
+  try { await requireGithubCredentials(); } catch {}
+}
+
+function initializeMode() {
+  const connect = $("#github-connect");
+  const logout = $(".logout-form");
+  if (PAGES_MODE) {
+    connect.hidden = false;
+    logout.hidden = true;
+    $("#runtime-mode-label").textContent = "GitHub Pagesモード";
+    $("#privacy-copy").innerHTML = "<strong>一時保存</strong><br>参考画像は処理開始後、生成結果は12時間後にGitHubから削除します。";
+    updateConnectionUi();
+  } else {
+    connect.hidden = true;
+    logout.hidden = false;
+  }
 }
 
 function activeTemplates() {
   const now = Date.now();
   const templates = getStored(STORAGE.templates, []).filter((item) => item.expiresAt > now);
-  setStored(STORAGE.templates, templates);
+  trySetStored(STORAGE.templates, templates);
   return templates;
 }
 
@@ -207,7 +439,7 @@ function saveTemplate() {
   if (!state.form.articleTitle) return alert("テンプレート名として案件名を入力してください。");
   const templates = activeTemplates();
   templates.unshift({ id: crypto.randomUUID(), name: state.form.articleTitle, data: state.form, createdAt: Date.now(), expiresAt: Date.now() + FIFTEEN_DAYS });
-  setStored(STORAGE.templates, templates);
+  if (!trySetStored(STORAGE.templates, templates)) return alert("ブラウザの保存容量が不足しています。");
   alert("テンプレートを15日間保存しました。");
 }
 
@@ -231,7 +463,7 @@ function templateAction(action, id) {
   }
   if (action === "renew") item.expiresAt = Date.now() + FIFTEEN_DAYS;
   if (action === "delete") templates = templates.filter((entry) => entry.id !== id);
-  setStored(STORAGE.templates, templates);
+  trySetStored(STORAGE.templates, templates);
   renderTemplates();
 }
 
@@ -245,17 +477,26 @@ async function generateFree() {
   button.textContent = "生成しています…";
   $("#free-results").innerHTML = `<div class="spinner"></div><h2>画像を生成中</h2><p>構図を組み立てています。</p>`;
   try {
-    const result = await api("/api/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt, references: state.freeReferences, count: Number($("#free-count").value) })
-    });
+    state.generationController = new AbortController();
+    const result = PAGES_MODE
+      ? await runPagesJob(
+          "free",
+          { prompt, count: Number($("#free-count").value) },
+          state.freeReferences,
+          ({ message }) => { $("#free-results").innerHTML = `<div class="spinner"></div><h2>画像を生成中</h2><p>${escapeHtml(message)}</p>`; }
+        )
+      : await api("/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt, references: state.freeReferences, count: Number($("#free-count").value) })
+        });
     $("#free-results").className = "free-result-grid";
     $("#free-results").innerHTML = result.images.map((image, index) => `<figure><img src="${image.dataUrl}" alt="フリー生成画像 ${index + 1}"><figcaption><a href="${image.dataUrl}" download="free-image-${index + 1}.png">画像を保存</a></figcaption></figure>`).join("");
   } catch (cause) {
     $("#free-results").className = "empty-canvas";
     $("#free-results").innerHTML = `<span>!</span><h2>生成できませんでした</h2><p>${escapeHtml(cause.message)}</p>`;
   } finally {
+    state.generationController = null;
     button.disabled = false;
     button.textContent = "画像を生成する →";
   }
@@ -278,7 +519,11 @@ function bindEvents() {
   $$("[data-back]").forEach((button) => button.addEventListener("click", () => goStage(Number(button.dataset.back))));
   $$("[data-next]").forEach((button) => button.addEventListener("click", () => goStage(Number(button.dataset.next))));
   $("#generate-article").addEventListener("click", generateArticle);
-  $("#cancel-generation").addEventListener("click", () => { state.generating = false; goStage(3); });
+  $("#cancel-generation").addEventListener("click", () => {
+    state.generating = false;
+    state.generationController?.abort();
+    goStage(3);
+  });
   $("#article-results").addEventListener("click", (event) => {
     const card = event.target.closest("[data-image-index]");
     if (card) selectArticleImage(Number(card.dataset.imageIndex));
@@ -303,7 +548,22 @@ function bindEvents() {
     if (button.dataset.templateDelete) templateAction("delete", button.dataset.templateDelete);
   });
   $("#generate-free").addEventListener("click", generateFree);
+  $("#history-grid").addEventListener("change", (event) => {
+    const checkbox = event.target.closest("[data-history-select]");
+    if (!checkbox) return;
+    if (checkbox.checked) state.selectedHistoryIds.add(checkbox.dataset.historySelect);
+    else state.selectedHistoryIds.delete(checkbox.dataset.historySelect);
+    renderHistory();
+  });
+  $("#delete-selected-history").addEventListener("click", deleteSelectedHistory);
+  $("#clear-history").addEventListener("click", clearHistory);
+  $("#github-connect").addEventListener("click", toggleGithubConnection);
+  $("#github-token-form").addEventListener("submit", submitGithubToken);
+  $("#cancel-github-token").addEventListener("click", cancelGithubToken);
 }
 
+initializeMode();
 bindEvents();
 activeTemplates();
+activeHistory();
+setInterval(activeHistory, 15 * 60 * 1000);

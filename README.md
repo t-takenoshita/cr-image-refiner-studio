@@ -1,18 +1,17 @@
 # CR Image Refiner
 
-記事用クリエイティブと自由入力の画像を、OpenAI Image APIで生成するローカルWebアプリです。
+記事用クリエイティブと自由入力画像を `gpt-image-2` で生成するWebスタジオです。ローカル実行と、GitHub Pages + GitHub Actionsによるバックグラウンド生成の2モードに対応します。
 
 ## 主な機能
 
 - 記事画像制作: 依頼入力 → AI要件化 → 4案生成 → 確認 → 採用・修正
-- フリー画像生成
-- 生成履歴とテンプレートのブラウザ保存
-- 共通パスワードによるアクセス制限
-- 生成画像のローカル保存
+- 記事案件に紐づかないフリー画像生成
+- 採用画像をブラウザのLocal Storageへ12時間保存
+- 履歴画像の複数選択削除、全削除、使用容量表示
+- テンプレートをブラウザへ15日保存し、期限延長・削除
+- GitHub PagesからActionsを起動し、画面上で生成完了まで待機
 
-Google Forms、Google Sheets、Google Drive、Chatwork、GitHub Actionsには接続しません。
-
-## セットアップ
+## ローカル実行
 
 Node.js 20以上が必要です。
 
@@ -21,7 +20,7 @@ cp .env.example .env
 npm install
 ```
 
-`.env`に次の2項目を設定します。
+`.env`へ設定します。
 
 ```dotenv
 OPENAI_API_KEY=sk-...
@@ -36,18 +35,42 @@ npm run dev
 
 [http://localhost:3000/studio](http://localhost:3000/studio) を開き、`SITE_PASSWORD`でログインします。停止は起動したターミナルで `Ctrl+C` です。
 
+## GitHub Pages + Actions
+
+リポジトリSecret `OPENAI_API_KEY` を画像生成Workflowが利用します。`SITE_PASSWORD` は依頼文の暗号化・復号に利用します。APIキーがブラウザやPagesへ配信されることはありません。
+
+1. GitHubの **Settings → Pages → Build and deployment** で Source を **GitHub Actions** にします。
+2. `main` へpushすると `.github/workflows/deploy-pages.yml` が静的UIを公開します。
+3. Pages上で初めて生成するとき、Fine-grained personal access tokenを入力します。
+4. tokenは対象リポジトリだけを選び、**Actions: Read and write** と **Contents: Read and write** を付けます。
+5. 接続画面でtokenと、Repository secret `SITE_PASSWORD` と同じサイトパスワードを入力します。
+
+tokenとサイトパスワードはブラウザの `sessionStorage` にだけ保存され、タブを閉じると消えます。依頼文はAES-GCMで暗号化されてから `.github/workflows/generate-pages.yml` へ送られ、Action内だけで復号されます。画面はqueued / generating / completedをポーリング表示します。
+
+### 一時画像の扱い
+
+- 参考画像: 非公開のDraft Releaseへ一時アップロードし、Actionの処理後に削除
+- 生成画像と結果JSON: 同じDraft Releaseに置き、12時間後に削除
+- Cleanup: `.github/workflows/cleanup-pages-results.yml` が毎時実行
+- 採用履歴: 各ブラウザのLocal Storageへ12時間保存。画面から個別・一括削除可能
+
+GitHub Pagesは静的配信なので、ページそのものへ安全な共通パスワード認証を付けることはできません。生成操作はリポジトリ所有者のGitHub tokenがないと実行できません。UI自体も非公開にする必要がある場合は、アクセス制御を持つ別のホスティングが必要です。
+
 ## 保存先
 
-- 生成画像: `.runtime/generated/`
-- 履歴・テンプレート: ブラウザのLocal Storage
-- APIキー・サイトパスワード: `.env`
+- ローカル生成画像: `.runtime/generated/`
+- ローカル履歴・テンプレート: ブラウザのLocal Storage
+- ローカルAPIキー・サイトパスワード: `.env`
+- Pages一時画像: GitHub Draft Release（12時間で削除）
 
-`.runtime/`と`.env`はGit管理の対象外です。履歴とテンプレートはブラウザ単位で保存され、テンプレートはアプリの仕様に従って15日で期限切れになります。
+`.runtime/`、`.env`、`node_modules/` はGit管理対象外です。
 
 ## 構成
 
 ```text
-src/       Webサーバー、認証、画像API、プロンプト生成
-web/       画面
-tokens.css デザイントークン
+.github/workflows/  Pages公開、画像生成、12時間Cleanup
+scripts/            Actions用生成・Cleanup処理
+src/                ローカルサーバー、認証、OpenAI/GitHub API、プロンプト生成
+web/                ローカルとPagesで共用する画面
+tokens.css          デザイントークン
 ```

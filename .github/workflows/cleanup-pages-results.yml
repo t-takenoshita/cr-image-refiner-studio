@@ -1,0 +1,25 @@
+name: Delete expired Pages results
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Delete assets older than 12 hours
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/cleanup_github_runtime.mjs
