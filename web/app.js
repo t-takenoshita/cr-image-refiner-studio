@@ -202,13 +202,21 @@ function updateGenerationStatus(message, progress = 15) {
 
 async function runPagesJob(mode, payload, references, onStatus) {
   const { token, sitePassword } = await requireGithubCredentials();
-  const job = await dispatchPagesGeneration({ token, sitePassword, mode, payload, references });
-  return waitForPagesGeneration({
-    token,
-    job,
-    signal: state.generationController?.signal,
-    onStatus
-  });
+  try {
+    const job = await dispatchPagesGeneration({ token, sitePassword, mode, payload, references });
+    return await waitForPagesGeneration({
+      token,
+      job,
+      signal: state.generationController?.signal,
+      onStatus
+    });
+  } catch (cause) {
+    if (/GitHub API: (Bad credentials|Resource not accessible|Not Found)/i.test(cause.message || "")) {
+      clearGithubToken();
+      updateConnectionUi();
+    }
+    throw cause;
+  }
 }
 
 async function generateArticle() {
@@ -409,6 +417,7 @@ function cancelGithubToken() {
 function updateConnectionUi() {
   if (!PAGES_MODE) return;
   const connected = Boolean(readGithubToken() && readSitePassword());
+  $("#github-connect").hidden = connected;
   $("#github-connect").classList.toggle("is-connected", connected);
   $("#github-connect-label").textContent = connected ? "GitHub接続済み" : "GitHub接続";
   $("#runtime-status .status-dot").classList.toggle("is-waiting", !connected);
