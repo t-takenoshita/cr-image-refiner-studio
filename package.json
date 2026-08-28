@@ -9,30 +9,6 @@
   },
   "scripts": {
     "dev": "node src/web_server.mjs",
-    "start": "node src/web_server.mjs",
-    "google:preflight": "node tools/google_sheets_preflight.mjs",
-    "queue:list": "node tools/list_queue.mjs --csv fixtures/google_form_headers.csv",
-    "queue:google:list": "node tools/run_google_queue.mjs --dry-run --list-only --only-new",
-    "queue:google:dry-run": "node tools/run_google_queue.mjs --dry-run --only-new --limit 1",
-    "queue:next:dry-run": "node tools/run_queue.mjs --dry-run --csv fixtures/google_form_headers.csv --only-new --limit 1",
-    "queue:dry-run": "node tools/run_queue.mjs --dry-run --fixture fixtures/google_form_row.json",
-    "queue:csv:dry-run": "node tools/run_queue.mjs --dry-run --csv fixtures/google_form_headers.csv",
-    "request:dry-run": "node tools/process_request.mjs --dry-run --fixture fixtures/google_form_row.json",
-    "prompt:dry-run": "node tools/build_prompt_pack.mjs --dry-run --fixture fixtures/google_form_row.json",
-    "initial:draft:dry-run": "node tools/run_initial_draft.mjs --source public-csv --only-new --after-last-posted-row --disable-policy-gate --limit 1",
-    "initial:draft:execute": "node tools/run_initial_draft.mjs --source public-csv --only-new --after-last-posted-row --disable-policy-gate --include-prompted --limit 1 --execute --send-chatwork --guardrails config/guardrails.initial_draft.example.json --openai-env-file ../secrets/openai.env --chatwork-env-file ../secrets/chatwork.env",
-    "sheet:inspect:dry-run": "node tools/inspect_sheet.mjs --dry-run",
-    "revision:dry-run": "node tools/revise_from_feedback.mjs --dry-run --request-id aicr_20260612_dd6e98770a --variant 1 --feedback \"画像①、無料訴求が強すぎるので自然見え寄せ。BA感も少し弱める\"",
-    "revision:chatwork:watch": "node tools/run_chatwork_revision_watch.mjs --room-id 442334168 --chatwork-env-file ../secrets/chatwork.env",
-    "revision:chatwork:execute": "node tools/run_chatwork_revision_watch.mjs --room-id 442334168 --guardrails config/guardrails.initial_draft.example.json --openai-env-file ../secrets/openai.env --chatwork-env-file ../secrets/chatwork.env --execute --send-chatwork",
-    "feedback:chatwork:parse": "node tools/parse_chatwork_feedback.mjs",
-    "chatwork:check": "node tools/check_chatwork.mjs --env-file ../secrets/chatwork.env",
-    "chatwork:test:send": "node tools/check_chatwork.mjs --env-file ../secrets/chatwork.env --send --message テスト",
-    "chatwork:dry-run": "node tools/post_chatwork.mjs --dry-run",
-    "sheet:dry-run": "node tools/write_sheet_status.mjs --dry-run --fixture fixtures/google_form_row.json"
-  },
-  "dependencies": {
-    "googleapis": "^173.0.0",
-    "sharp": "^0.35.3"
+    "start": "node src/web_server.mjs"
   }
 }

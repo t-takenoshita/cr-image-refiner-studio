@@ -169,10 +169,7 @@ function requestRowFromWeb(body = {}) {
 
 async function buildWebPlan(body) {
   const request = normalizeRequestRow(requestRowFromWeb(body), { sourceKind: "web" });
-  const promptPack = await buildPromptPack(request, {
-    guardrails: { policy_gate_enabled: false },
-    now: new Date()
-  });
+  const promptPack = await buildPromptPack(request, { now: new Date() });
   return {
     requestId: request.request_id,
     warnings: request.validation.warnings,

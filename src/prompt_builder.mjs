@@ -1,8 +1,4 @@
 import crypto from "node:crypto";
-import fs from "node:fs/promises";
-import path from "node:path";
-import { buildNoteBandPlan, parseSize } from "./image_postprocess.mjs";
-import { runPolicyGate } from "./policy_gate.mjs";
 
 const DEFAULT_APPEAL_VARIANTS = Object.freeze([
   {
@@ -194,11 +190,10 @@ const CREATIVE_PROMPT_PRINCIPLES = Object.freeze({
 
 export async function buildPromptPack(request, options = {}) {
   const now = options.now ? new Date(options.now) : new Date();
-  const templateConfig = await loadPromptTemplateConfig(options.templatePath);
+  const templateConfig = loadPromptTemplateConfig();
   const variants = templateConfig.variants;
   const textQualityPrompt = templateConfig.text_quality_prompt;
-  const requestForPrompt = enrichBrandAssetsForPrompt(request, options.guardrails || {});
-  const requestPolicyGate = runPolicyGate({ request: requestForPrompt }, options.guardrails);
+  const requestForPrompt = request;
   const colorPalettes = selectColorPalettes(requestForPrompt, variants.length, options);
   const designToneHint = buildDesignToneHint(requestForPrompt);
   const textContract = buildTextContract(requestForPrompt, textQualityPrompt);
@@ -226,18 +221,6 @@ export async function buildPromptPack(request, options = {}) {
       typography: variantWithPalette.typography,
       offer: requestForPrompt.offer || "offer_unspecified"
     };
-    const policyGateResult = runPolicyGate(
-      {
-        request: requestForPrompt,
-        variant: {
-          ...variantWithPalette,
-          prompt
-        },
-        prompt
-      },
-      options.guardrails
-    );
-
     return {
       variant_id: variantId,
       variant_index: index + 1,
@@ -248,9 +231,7 @@ export async function buildPromptPack(request, options = {}) {
         variant_text_style_instruction: variantWithPalette.text_style_instruction || "",
         variant_photo_treatment: variantWithPalette.photo_treatment || ""
       },
-      prompt_source_policy: buildPromptSourcePolicy(),
-      generation_tags: generationTags,
-      policy_gate_result: policyGateResult
+      generation_tags: generationTags
     };
   });
 
@@ -260,16 +241,8 @@ export async function buildPromptPack(request, options = {}) {
     generated_at: now.toISOString(),
     source: requestForPrompt.source,
     request_summary: buildRequestSummary(requestForPrompt),
-    client_master: requestForPrompt.client_master || null,
-    brand_assets: buildPromptPackBrandAssets(requestForPrompt),
-    prompt_contract: buildPromptContract(),
     creative_prompt_principles: buildCreativePromptPrinciples(),
-    request_policy_gate_result: requestPolicyGate,
-    variants: promptVariants,
-    learning_boundary: {
-      auto_register_learning: false,
-      reason: "成果不明の生成結果は勝ち学習へ自動登録しない。採用/非採用/成果が明確なものだけ候補化する。"
-    }
+    variants: promptVariants
   };
 }
 
@@ -282,19 +255,14 @@ export function buildVariantPrompt(request, variant, index = 0, options = {}) {
   const appeal = request.appeal || "相談しやすさと比較検討のしやすさ";
   const offer = request.offer || "依頼シートのオファー";
   const tone = request.tone || "清潔感、信頼感、スマホで読みやすい";
-  const clientNgList = request.client_master?.ng_expressions || [];
-  const requesterNgList = (request.ng_expressions || []).filter(
-    (term) => !clientNgList.some((clientTerm) => clientTerm.toLowerCase() === term.toLowerCase())
-  );
+  const requesterNgList = request.ng_expressions || [];
   const requesterNg = requesterNgList.length ? requesterNgList.join(" / ") : "";
-  const clientNg = clientNgList.length ? clientNgList.join(" / ") : "";
   const visualElements = request.visual_elements || "依頼内容に沿った自然な人物・商品理解の補助要素";
   const proofCopy = request.proof_copy || "";
   const performanceRationale = request.performance_rationale || "クリック前理解とCVR改善";
   const creativeTitle = request.creative_title || "未指定";
   const designToneHint = buildDesignToneHint(request);
   const textContract = options.textContract || variant.text_contract_object || buildTextContract(request);
-  const brandPromptLines = buildBrandPromptLines(request);
 
   const lines = [
     `Image2で日本語の正方形広告バナーを1枚生成してください。`,
@@ -315,7 +283,6 @@ export function buildVariantPrompt(request, variant, index = 0, options = {}) {
     `キャッチコピー設計: ${CREATIVE_PROMPT_PRINCIPLES.copy_flow}`,
     `希望テイスト/デザインヒント: ${designToneHint}`,
     `配色パターン: ${variant.color_palette_name || variant.color}（${variant.color_palette_colors || variant.color}）`,
-    ...brandPromptLines,
     variant.color_palette_mood ? `配色の狙い: ${variant.color_palette_mood}` : "",
     variant.color_palette_accent_rule ? `配色運用: ${variant.color_palette_accent_rule}` : "",
     `配色ルール: 4案で同じ固定配色を繰り返さない。この案では上記の配色パターンを主軸にし、希望テイストに合う範囲で濃淡・余白・アクセント量を調整する。蛍光色、虹色、多色使い、原色同士の衝突、読みにくい低コントラストは避ける。白、黒、薄グレー以外の追加色を勝手に足さない。`,
@@ -338,7 +305,6 @@ export function buildVariantPrompt(request, variant, index = 0, options = {}) {
     proofCopy ? `入れたい文言・数字・権威付け: ${proofCopy}` : "",
     `CPA/CVRに効きそうな理由: ${performanceRationale}`,
     requesterNg ? `依頼者指定NG表現: ${requesterNg}` : "",
-    clientNg ? `案件別NG表現: ${clientNg}` : "",
     `目的: CPA/CVR改善につながるクリック前理解を高める。来院率・契約率・契約単価まで見据えた継続性も考慮する。`
   ];
 
@@ -365,10 +331,7 @@ export function buildRequestSummary(request) {
     notes: request.notes || "",
     landing_page_url: request.urls?.landing_page || "",
     reference_url: request.urls?.reference || "",
-    logo_selection: request.logo_selection || "",
-    drive_folder_url: request.urls?.drive_folder || "",
-    chatwork_room_id_present: Boolean(request.chatwork?.room_id),
-    client_master_matched: request.client_master?.matched ?? null
+    logo_selection: request.logo_selection || ""
   };
 }
 
@@ -384,201 +347,10 @@ function buildCreativePromptPrinciples() {
   };
 }
 
-function buildPromptContract() {
+function loadPromptTemplateConfig() {
   return {
-    source_text_policy: "verbatim_form_fields",
-    prompt_mode: "verbatim_by_default",
-    ai_rewrite_performed: false,
-    ai_safety_omission_performed: false,
-    policy_gate_mode: "disabled",
-    human_revision_required_for_rewrite: false,
-    note: "リポジトリ独自のポリシー判定は無効です。"
-  };
-}
-
-function buildPromptSourcePolicy() {
-  return {
-    prompt_mode: "verbatim_by_default",
-    ai_rewrite_performed: false,
-    ai_safety_omission_performed: false,
-    policy_gate_mutated_prompt: false
-  };
-}
-
-function enrichBrandAssetsForPrompt(request, guardrails = {}) {
-  if (!request.brand_assets) return request;
-
-  const brandAssets = {
-    ...request.brand_assets,
-    logo: { ...(request.brand_assets.logo || {}) },
-    required_note: { ...(request.brand_assets.required_note || {}) },
-    brand_color: { ...(request.brand_assets.brand_color || {}) }
-  };
-  const enriched = {
-    ...request,
-    brand_assets: brandAssets
-  };
-  const noteEnabled = brandAssets.required_note?.enabled === true && Boolean(brandAssets.required_note?.text);
-  if (!noteEnabled) return enriched;
-
-  const finalSize = parseSize(guardrails.image2_api?.final_size || "1080x1080") || { width: 1080, height: 1080 };
-  const noteBandPlan = buildNoteBandPlan({
-    noteText: brandAssets.required_note.text,
-    width: finalSize.width,
-    height: finalSize.height,
-    config: guardrails.brand_assets?.note_band || {},
-    brandColorHex: brandAssets.brand_color?.hex || ""
-  });
-  if (noteBandPlan.status !== "planned") return enriched;
-
-  brandAssets.required_note.band_plan = summarizeNoteBandPlan(noteBandPlan);
-  if (guardrails.brand_assets?.bottom_safe_area_prompt_enabled !== false) {
-    brandAssets.bottom_safe_area = {
-      schema_version: "aicr-bottom-safe-area-v1",
-      prompt_enabled: true,
-      source: "required_note_band_plan",
-      bottom_percent: noteBandPlan.bottom_safe_area_percent,
-      band_height: noteBandPlan.band_height,
-      canvas_width: noteBandPlan.width,
-      canvas_height: noteBandPlan.height
-    };
-  }
-  if (
-    brandAssets.logo?.enabled === true &&
-    brandAssets.logo?.avoid_note_band_enabled === true &&
-    guardrails.brand_assets?.logo_avoid_note_band_enabled !== false
-  ) {
-    brandAssets.logo.adjusted_for_note_band = true;
-    brandAssets.logo.effective_placement = `${brandAssets.logo.placement || "bottom_right"}_above_note_band`;
-  }
-
-  return enriched;
-}
-
-function buildPromptPackBrandAssets(request) {
-  if (!request.brand_assets) return null;
-  return {
-    schema_version: request.brand_assets.schema_version || "aicr-brand-assets-v1",
-    logo: {
-      available: Boolean(request.brand_assets.logo?.available),
-      enabled: Boolean(request.brand_assets.logo?.enabled),
-      reference: request.brand_assets.logo?.reference || "",
-      source_type: request.brand_assets.logo?.source_type || "",
-      source: request.brand_assets.logo?.source || "",
-      label: request.brand_assets.logo?.label || "",
-      plate_background_color: request.brand_assets.logo?.plate_background_color || "",
-      plate_padding: Number(request.brand_assets.logo?.plate_padding) || 0,
-      max_width_ratio: Number(request.brand_assets.logo?.max_width_ratio) || 0,
-      max_height_ratio: Number(request.brand_assets.logo?.max_height_ratio) || 0,
-      margin: Number(request.brand_assets.logo?.margin) || 0,
-      alignment: request.brand_assets.logo?.alignment || "",
-      placement: request.brand_assets.logo?.placement || "bottom_right",
-      effective_placement: request.brand_assets.logo?.effective_placement || request.brand_assets.logo?.placement || "bottom_right",
-      adjusted_for_note_band: Boolean(request.brand_assets.logo?.adjusted_for_note_band),
-      avoid_note_band_enabled: Boolean(request.brand_assets.logo?.avoid_note_band_enabled),
-      postprocess_overlay_enabled: Boolean(request.brand_assets.logo?.postprocess_overlay_enabled),
-      api_input_required: Boolean(request.brand_assets.logo?.api_input_required)
-    },
-    required_note: {
-      available: Boolean(request.brand_assets.required_note?.available),
-      enabled: Boolean(request.brand_assets.required_note?.enabled),
-      text: request.brand_assets.required_note?.text || "",
-      source: request.brand_assets.required_note?.source || "",
-      band_plan: request.brand_assets.required_note?.band_plan || null
-    },
-    brand_color: {
-      available: Boolean(request.brand_assets.brand_color?.available),
-      hex: request.brand_assets.brand_color?.hex || "",
-      use_for_note_band: Boolean(request.brand_assets.brand_color?.use_for_note_band),
-      prompt_enabled: Boolean(request.brand_assets.brand_color?.prompt_enabled)
-    },
-    bottom_safe_area: request.brand_assets.bottom_safe_area || null,
-    notes: request.brand_assets.notes || ""
-  };
-}
-
-function buildBrandPromptLines(request) {
-  const lines = [];
-  const brandAssets = request.brand_assets || {};
-  const brandColor = brandAssets.brand_color?.hex || "";
-  if (brandColor && brandAssets.brand_color?.prompt_enabled === true) {
-    lines.push(`案件別ブランドカラー: ${brandColor}。配色パターンと衝突しない範囲で、アクセントや帯・罫線に活用する。`);
-  }
-  if (brandAssets.bottom_safe_area?.prompt_enabled === true) {
-    lines.push(
-      `下部セーフエリア: 画像下部${brandAssets.bottom_safe_area.bottom_percent}%（約${brandAssets.bottom_safe_area.band_height}px）は後工程で注釈帯を重ねるため、無地に近い余白にし、文字・ロゴ・顔・商品・価格など重要要素を配置しない。`
-    );
-  }
-  if (brandAssets.logo?.prompt_instruction_enabled) {
-    const placement = brandAssets.logo.placement || "bottom_right";
-    if (brandAssets.logo.adjusted_for_note_band) {
-      lines.push(
-        `ロゴ配置指定: 入力画像として渡されるロゴ画像は、変形・再描画・色変更・文字起こしせず、右下寄りかつ注釈帯の上端より上に収まる位置へ配置する。最終後処理でも同じロゴ画像を帯の外側に合成するため、AIがロゴ風の架空文字や図形を新規生成しない。`
-      );
-    } else {
-      lines.push(
-        `ロゴ配置指定: 入力画像として渡されるロゴ画像を、変形・再描画・色変更・文字起こしせず、そのまま${placement === "bottom_right" ? "右下" : placement}に配置する。ロゴをAIが文字や図形として新規生成しない。`
-      );
-    }
-  }
-  if (brandAssets.required_note?.enabled && brandAssets.required_note?.text) {
-    lines.push(
-      "注釈帯予約: 生成後に下部へ必須注釈帯をプログラム合成するため、下端には顔・主コピー・重要オファーを置かない。注釈文言自体は画像生成AIに描かせない。"
-    );
-  }
-  return lines;
-}
-
-function summarizeNoteBandPlan(plan) {
-  return {
-    schema_version: plan.schema_version,
-    status: plan.status,
-    width: plan.width,
-    height: plan.height,
-    band_height: plan.band_height,
-    band_top: plan.band_top,
-    bottom_safe_area_percent: plan.bottom_safe_area_percent,
-    line_count: plan.line_count,
-    background_color: plan.style?.backgroundColor || "",
-    text_color: plan.style?.textColor || ""
-  };
-}
-
-async function loadPromptTemplateConfig(templatePath) {
-  if (!templatePath) {
-    return {
-      variants: DEFAULT_VARIANTS,
-      text_quality_prompt: DEFAULT_TEXT_QUALITY_PROMPT
-    };
-  }
-  const absolutePath = path.resolve(templatePath);
-  const raw = await fs.readFile(absolutePath, "utf8");
-  const parsed = JSON.parse(raw);
-
-  if (!Array.isArray(parsed.variants) || parsed.variants.length < 4) {
-    throw new Error("prompt template must contain at least 4 variants.");
-  }
-  return {
-    variants: normalizeLegacyVariants(parsed.variants).slice(0, 4),
-    text_quality_prompt: normalizeTextQualityPrompt(parsed.text_quality_prompt)
-  };
-}
-
-function normalizeLegacyVariants(variants) {
-  return variants.map((variant, index) => ({
-    ...normalizeAppealVariant(variant, index),
-    design_style_id: variant.design_style_id || "palette_pool",
-    design_style_name: variant.design_style_name || "配色プール選定"
-  }));
-}
-
-function normalizeAppealVariant(variant, index) {
-  const fallback = DEFAULT_APPEAL_VARIANTS[index] || DEFAULT_APPEAL_VARIANTS[index % DEFAULT_APPEAL_VARIANTS.length] || {};
-  return {
-    ...fallback,
-    ...variant,
-    id: variant.id || fallback.id || `appeal_${index + 1}`,
-    direction: variant.direction || fallback.direction || ""
+    variants: DEFAULT_VARIANTS,
+    text_quality_prompt: DEFAULT_TEXT_QUALITY_PROMPT
   };
 }
 
