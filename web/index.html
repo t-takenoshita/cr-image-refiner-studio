@@ -10,7 +10,22 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./styles.css?v=5">
 </head>
-<body>
+<body class="pages-auth-checking">
+  <div class="pages-auth-shell" id="pages-auth-shell" hidden>
+    <section class="auth-card" aria-labelledby="pages-login-title">
+      <div class="brand auth-brand"><span class="brand-mark">CR</span><span><strong>Image Refiner</strong><small>Private studio</small></span></div>
+      <p class="mono-label">PRIVATE ACCESS</p>
+      <h1 id="pages-login-title">スタジオにログイン</h1>
+      <p class="auth-lead">共有パスワードを入力してください。</p>
+      <form class="auth-form" id="pages-login-form">
+        <div class="field"><label for="pages-login-password">パスワード <span class="required-mark" aria-hidden="true">＊</span><span class="visually-hidden">必須</span></label><input id="pages-login-password" type="password" required autocomplete="current-password"></div>
+        <p class="auth-error" id="pages-login-error" role="alert"></p>
+        <button class="button button-primary" type="submit">ログインする</button>
+      </form>
+      <p class="auth-note">認証状態はこのタブ内だけで保持します。タブを閉じるとログアウトします。</p>
+    </section>
+    <p class="auth-foot">CR Image Refiner · Restricted access</p>
+  </div>
   <button class="mobile-menu" id="mobile-menu" type="button" aria-label="メニューを開く" aria-expanded="false">☰</button>
   <aside class="sidebar" id="sidebar">
     <div class="brand"><span class="brand-mark">CR</span><span><strong>Image Refiner</strong><small>Standalone studio</small></span></div>
@@ -92,6 +107,7 @@
       <small>どちらもsessionStorageにのみ入り、タブを閉じると消えます。tokenには対象リポジトリのActions / Contents読み書き権限が必要です。</small>
     </form>
   </dialog>
-  <script type="module" src="./app.js?v=5"></script>
+  <script type="module" src="./pages-auth.js?v=1"></script>
+  <script type="module" src="./app.js?v=6"></script>
 </body>
 </html>

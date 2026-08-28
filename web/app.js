@@ -356,7 +356,8 @@ async function requireGithubCredentials() {
   });
   pendingTokenRequest = { promise, resolve: resolveRequest, reject: rejectRequest };
   $("#github-token").value = "";
-  $("#site-password").value = "";
+  $("#site-password").value = existingPassword;
+  $("#site-password").closest(".field").hidden = Boolean(PAGES_MODE && existingPassword);
   $("#github-token-error").textContent = "";
   $("#github-token-dialog").showModal();
   return promise;
@@ -365,7 +366,7 @@ async function requireGithubCredentials() {
 async function submitGithubToken(event) {
   event.preventDefault();
   const token = $("#github-token").value.trim();
-  const sitePassword = $("#site-password").value;
+  const sitePassword = $("#site-password").value || readSitePassword();
   const button = $("#save-github-token");
   const error = $("#github-token-error");
   error.textContent = "";
@@ -406,7 +407,6 @@ function updateConnectionUi() {
 async function toggleGithubConnection() {
   if (readGithubToken()) {
     clearGithubToken();
-    clearSitePassword();
     updateConnectionUi();
     return;
   }
@@ -418,7 +418,7 @@ function initializeMode() {
   const logout = $(".logout-form");
   if (PAGES_MODE) {
     connect.hidden = false;
-    logout.hidden = true;
+    logout.hidden = false;
     $("#runtime-mode-label").textContent = "GitHub Pagesモード";
     $("#privacy-copy").innerHTML = "<strong>一時保存</strong><br>参考画像は処理開始後、生成結果は12時間後にGitHubから削除します。";
     updateConnectionUi();
@@ -562,6 +562,14 @@ function bindEvents() {
   $("#github-connect").addEventListener("click", toggleGithubConnection);
   $("#github-token-form").addEventListener("submit", submitGithubToken);
   $("#cancel-github-token").addEventListener("click", cancelGithubToken);
+  $(".logout-form").addEventListener("submit", (event) => {
+    if (!PAGES_MODE) return;
+    event.preventDefault();
+    sessionStorage.removeItem("crir_pages_authenticated");
+    clearGithubToken();
+    clearSitePassword();
+    window.location.reload();
+  });
 }
 
 async function initializeBrowserDatabase() {
