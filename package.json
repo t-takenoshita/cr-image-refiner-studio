@@ -10,16 +10,15 @@
   "scripts": {
     "dev": "node src/web_server.mjs",
     "start": "node src/web_server.mjs",
-    "test": "node --test",
     "google:preflight": "node tools/google_sheets_preflight.mjs",
-    "queue:list": "node tools/list_queue.mjs --csv tests/fixtures/google_form_headers.csv",
+    "queue:list": "node tools/list_queue.mjs --csv fixtures/google_form_headers.csv",
     "queue:google:list": "node tools/run_google_queue.mjs --dry-run --list-only --only-new",
     "queue:google:dry-run": "node tools/run_google_queue.mjs --dry-run --only-new --limit 1",
-    "queue:next:dry-run": "node tools/run_queue.mjs --dry-run --csv tests/fixtures/google_form_headers.csv --only-new --limit 1",
-    "queue:dry-run": "node tools/run_queue.mjs --dry-run --fixture tests/fixtures/google_form_row.json",
-    "queue:csv:dry-run": "node tools/run_queue.mjs --dry-run --csv tests/fixtures/google_form_headers.csv",
-    "request:dry-run": "node tools/process_request.mjs --dry-run --fixture tests/fixtures/google_form_row.json",
-    "prompt:dry-run": "node tools/build_prompt_pack.mjs --dry-run --fixture tests/fixtures/google_form_row.json",
+    "queue:next:dry-run": "node tools/run_queue.mjs --dry-run --csv fixtures/google_form_headers.csv --only-new --limit 1",
+    "queue:dry-run": "node tools/run_queue.mjs --dry-run --fixture fixtures/google_form_row.json",
+    "queue:csv:dry-run": "node tools/run_queue.mjs --dry-run --csv fixtures/google_form_headers.csv",
+    "request:dry-run": "node tools/process_request.mjs --dry-run --fixture fixtures/google_form_row.json",
+    "prompt:dry-run": "node tools/build_prompt_pack.mjs --dry-run --fixture fixtures/google_form_row.json",
     "initial:draft:dry-run": "node tools/run_initial_draft.mjs --source public-csv --only-new --after-last-posted-row --disable-policy-gate --limit 1",
     "initial:draft:execute": "node tools/run_initial_draft.mjs --source public-csv --only-new --after-last-posted-row --disable-policy-gate --include-prompted --limit 1 --execute --send-chatwork --guardrails config/guardrails.initial_draft.example.json --openai-env-file ../secrets/openai.env --chatwork-env-file ../secrets/chatwork.env",
     "sheet:inspect:dry-run": "node tools/inspect_sheet.mjs --dry-run",
@@ -30,7 +29,7 @@
     "chatwork:check": "node tools/check_chatwork.mjs --env-file ../secrets/chatwork.env",
     "chatwork:test:send": "node tools/check_chatwork.mjs --env-file ../secrets/chatwork.env --send --message テスト",
     "chatwork:dry-run": "node tools/post_chatwork.mjs --dry-run",
-    "sheet:dry-run": "node tools/write_sheet_status.mjs --dry-run --fixture tests/fixtures/google_form_row.json"
+    "sheet:dry-run": "node tools/write_sheet_status.mjs --dry-run --fixture fixtures/google_form_row.json"
   },
   "dependencies": {
     "googleapis": "^173.0.0",

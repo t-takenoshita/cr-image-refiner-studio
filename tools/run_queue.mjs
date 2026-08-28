@@ -16,7 +16,7 @@ import { buildQueueEntries, selectQueueEntries, summarizeQueueEntries } from "..
 const args = parseArgs();
 const projectRoot = resolveProjectRoot(import.meta.url);
 const dataRoot = resolveDataRoot(projectRoot, args);
-const fixturePath = path.resolve(projectRoot, args.fixture || "tests/fixtures/google_form_row.json");
+const fixturePath = path.resolve(projectRoot, args.fixture || "fixtures/google_form_row.json");
 const { guardrails, guardrailsPath } = await loadGuardrails(projectRoot, args);
 const flags = buildExternalFlags(args);
 const limit = Number.parseInt(args.limit || "1", 10);

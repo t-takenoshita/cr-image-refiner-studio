@@ -16,7 +16,7 @@ import { writeJson } from "../src/manifest.mjs";
 const args = parseArgs();
 const projectRoot = resolveProjectRoot(import.meta.url);
 const dataRoot = resolveDataRoot(projectRoot, args);
-const fixturePath = path.resolve(projectRoot, args.fixture || "tests/fixtures/google_form_row.json");
+const fixturePath = path.resolve(projectRoot, args.fixture || "fixtures/google_form_row.json");
 const { guardrails } = await loadGuardrails(projectRoot, args);
 
 try {

@@ -7,7 +7,7 @@ import { buildQueueEntries, selectQueueEntries, summarizeQueueEntries } from "..
 const args = parseArgs();
 const projectRoot = resolveProjectRoot(import.meta.url);
 const dataRoot = resolveDataRoot(projectRoot, args);
-const fixturePath = path.resolve(projectRoot, args.fixture || "tests/fixtures/google_form_row.json");
+const fixturePath = path.resolve(projectRoot, args.fixture || "fixtures/google_form_row.json");
 
 try {
   const loaded = args.csv ? await loadRowsFromCsvPath(args.csv) : { rows: await loadFixtureRows(fixturePath) };

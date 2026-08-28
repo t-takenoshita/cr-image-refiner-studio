@@ -51,9 +51,9 @@ Codex本体は学習母艦/RAG/PDCA、このプロジェクトは制作ライン
 ```text
 /Users/miyekeyuta/Documents/AICR_Factory/
   config/
+  fixtures/
   src/
   tools/
-  tests/
 
 /Users/miyekeyuta/Documents/AICR_Factory_data/
   outputs/requests/{request_id}/
@@ -64,7 +64,6 @@ Codex本体は学習母艦/RAG/PDCA、このプロジェクトは制作ライン
 ## 基本コマンド
 
 ```bash
-npm test
 npm run google:preflight
 npm run queue:list
 npm run queue:google:list
@@ -77,7 +76,7 @@ npm run queue:csv:dry-run
 npm run revision:dry-run
 ```
 
-`npm run queue:dry-run` は、`tests/fixtures/google_form_row.json` を1件処理し、以下を作ります。
+`npm run queue:dry-run` は、`fixtures/google_form_row.json` を1件処理し、以下を作ります。
 
 ```text
 /Users/miyekeyuta/Documents/AICR_Factory_data/outputs/requests/{request_id}/prompt_pack.json
