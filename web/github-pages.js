@@ -5,7 +5,7 @@ import {
 } from "./image-history-db.js";
 
 const CONFIG = Object.freeze({
-  owner: "t-takenoshitatakumi",
+  owner: "t-takenoshita",
   repo: "cr-image-refiner-studio",
   workflow: "generate-pages.yml",
   releaseTag: "cr-image-refiner-runtime",
