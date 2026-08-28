@@ -76,7 +76,7 @@
       </section>
     </section>
 
-    <section class="view" data-view-panel="history"><header class="page-head"><div><p class="mono-label">12 HOUR LOCAL ARCHIVE</p><h1>生成履歴</h1><p>このブラウザに保存した採用画像は12時間後に自動削除されます。</p></div><div class="history-tools"><span id="history-storage-size">画像データ 0 B · 12時間保存</span><button class="button button-secondary" id="delete-selected-history" type="button" disabled>選択した画像を削除</button><button class="button button-secondary danger-button" id="clear-history" type="button" disabled>すべて削除</button></div></header><div class="history-grid" id="history-grid"></div></section>
+    <section class="view" data-view-panel="history"><header class="page-head"><div><p class="mono-label">3 DAY BROWSER ARCHIVE</p><h1>生成履歴</h1><p>採用画像はブラウザのIndexedDBへ保存し、3日後に自動削除します。</p></div><div class="history-tools"><span id="history-storage-size">画像データ 0 B · 3日保存</span><button class="button button-secondary" id="delete-selected-history" type="button" disabled>選択した画像を削除</button><button class="button button-secondary danger-button" id="clear-history" type="button" disabled>すべて削除</button></div></header><div class="history-grid" id="history-grid"></div></section>
     <section class="view" data-view-panel="templates"><header class="page-head"><div><p class="mono-label">15 DAY STORAGE</p><h1>テンプレート</h1><p>15日後に自動削除。必要なものは保存期限を更新できます。</p></div></header><div class="template-list" id="template-list"></div></section>
     <footer class="foot-line"><span>CR Image Refiner</span><span>Standalone Web Studio</span><span>Local-first · AICR prompt engine</span></footer>
   </main>
@@ -92,6 +92,6 @@
       <small>どちらもsessionStorageにのみ入り、タブを閉じると消えます。tokenには対象リポジトリのActions / Contents読み書き権限が必要です。</small>
     </form>
   </dialog>
-  <script type="module" src="./app.js?v=4"></script>
+  <script type="module" src="./app.js?v=5"></script>
 </body>
 </html>

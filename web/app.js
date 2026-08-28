@@ -10,13 +10,26 @@ import {
   validateGithubToken,
   waitForPagesGeneration
 } from "./github-pages.js";
+import {
+  clearHistoryEntries,
+  deleteHistoryEntries,
+  deleteTemplateEntries,
+  historyBytes,
+  listActiveHistory,
+  listActiveTemplates,
+  migrateLocalStorageHistory,
+  migrateLocalStorageTemplates,
+  saveHistoryEntry,
+  saveTemplateEntry,
+  trimHistoryEntries
+} from "./image-history-db.js";
 
-const STORAGE = {
+const LEGACY_STORAGE = {
   templates: "crir_templates_v2",
   history: "crir_history_v2"
 };
 const FIFTEEN_DAYS = 15 * 24 * 60 * 60 * 1000;
-const HISTORY_TTL = 12 * 60 * 60 * 1000;
+const HISTORY_TTL = 3 * 24 * 60 * 60 * 1000;
 const PAGES_MODE = isPagesMode();
 
 const state = {
@@ -30,6 +43,7 @@ const state = {
   images: [],
   selected: -1,
   selectedHistoryIds: new Set(),
+  historyObjectUrls: [],
   generating: false,
   generationController: null
 };
@@ -42,26 +56,19 @@ function getStored(key, fallback) {
   try { return JSON.parse(localStorage.getItem(key)) ?? fallback; }
   catch { return fallback; }
 }
-function trySetStored(key, value) {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-    return true;
-  } catch {
-    return false;
-  }
-}
 function escapeHtml(value = "") {
   return String(value).replace(/[&<>"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[char]));
 }
 
 function switchView(view) {
+  if (state.view === "history" && view !== "history") revokeHistoryObjectUrls();
   state.view = view;
   $$("[data-view-panel]").forEach((panel) => panel.classList.toggle("is-visible", panel.dataset.viewPanel === view));
   $$("[data-view]").forEach((button) => button.classList.toggle("is-active", button.dataset.view === view));
   $("#sidebar").classList.remove("is-open");
   $("#mobile-menu").setAttribute("aria-expanded", "false");
-  if (view === "history") renderHistory();
-  if (view === "templates") renderTemplates();
+  if (view === "history") void renderHistory();
+  if (view === "templates") void renderTemplates();
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -259,75 +266,69 @@ function selectArticleImage(index) {
   renderArticleImages();
 }
 
-function confirmSelection() {
+async function confirmSelection() {
   const image = state.images[state.selected];
   if (!image) return;
   $("#final-image").innerHTML = `<img src="${image.dataUrl}" alt="採用候補画像">`;
-  saveHistory(image);
+  try {
+    await saveHistory(image);
+  } catch (cause) {
+    alert(`画像履歴を保存できませんでした: ${cause.message}`);
+  }
   goStage(6);
 }
 
-function saveHistory(image) {
+async function saveHistory(image) {
   const now = Date.now();
-  const entry = {
+  const response = await fetch(image.dataUrl);
+  if (!response.ok) throw new Error("生成画像を読み込めませんでした。");
+  await saveHistoryEntry({
     id: image.id || crypto.randomUUID(),
-    dataUrl: image.dataUrl,
+    blob: await response.blob(),
     title: state.form.articleTitle || "生成画像",
     createdAt: now,
     expiresAt: now + HISTORY_TTL
-  };
-  const history = [entry, ...activeHistory().filter((item) => item.id !== entry.id)].slice(0, 20);
-  while (history.length && !storeHistory(history)) history.pop();
-  if (!history.length) alert("ブラウザの保存容量が不足しているため、履歴へ保存できませんでした。");
+  });
+  await trimHistoryEntries(20);
 }
 
-function renderHistory() {
-  const history = activeHistory();
-  $("#history-storage-size").textContent = `画像データ ${formatBytes(historyStorageBytes())} · 12時間保存`;
-  $("#delete-selected-history").disabled = state.selectedHistoryIds.size === 0;
-  $("#clear-history").disabled = history.length === 0;
-  $("#history-grid").innerHTML = history.length ? history.map((item) => {
-    const selected = state.selectedHistoryIds.has(item.id);
-    return `<article class="history-card ${selected ? "is-selected" : ""}"><label class="history-select"><input type="checkbox" data-history-select="${escapeHtml(item.id)}" ${selected ? "checked" : ""}><span>削除対象に選択</span></label><img src="${item.dataUrl}" alt="${escapeHtml(item.title)}"><div><h3>${escapeHtml(item.title)}</h3><p>${new Date(item.createdAt).toLocaleString("ja-JP")} · ${remainingTime(item.expiresAt || item.createdAt + HISTORY_TTL)}</p><a class="button button-secondary" href="${item.dataUrl}" download="${escapeHtml(item.title)}.png">保存</a></div></article>`;
-  }).join("") : `<div class="empty-canvas"><span>◷</span><h2>履歴はまだありません</h2><p>採用候補を確定すると12時間だけ保存されます。</p></div>`;
-}
-
-function activeHistory() {
-  const now = Date.now();
-  const original = getStored(STORAGE.history, []);
-  const history = original.filter((item) => Number(item.expiresAt || item.createdAt + HISTORY_TTL) > now);
-  const activeIds = new Set(history.map((item) => item.id));
-  state.selectedHistoryIds = new Set([...state.selectedHistoryIds].filter((id) => activeIds.has(id)));
-  if (history.length !== original.length) storeHistory(history);
-  return history;
-}
-
-function storeHistory(history) {
-  if (!history.length) {
-    localStorage.removeItem(STORAGE.history);
-    return true;
+async function renderHistory() {
+  try {
+    const history = await listActiveHistory();
+    revokeHistoryObjectUrls();
+    const activeIds = new Set(history.map((item) => item.id));
+    state.selectedHistoryIds = new Set([...state.selectedHistoryIds].filter((id) => activeIds.has(id)));
+    $("#history-storage-size").textContent = `画像データ ${formatBytes(historyBytes(history))} · 3日保存`;
+    $("#delete-selected-history").disabled = state.selectedHistoryIds.size === 0;
+    $("#clear-history").disabled = history.length === 0;
+    $("#history-grid").innerHTML = history.length ? history.map((item) => {
+      const selected = state.selectedHistoryIds.has(item.id);
+      const objectUrl = URL.createObjectURL(item.blob);
+      state.historyObjectUrls.push(objectUrl);
+      return `<article class="history-card ${selected ? "is-selected" : ""}"><label class="history-select"><input type="checkbox" data-history-select="${escapeHtml(item.id)}" ${selected ? "checked" : ""}><span>削除対象に選択</span></label><img src="${objectUrl}" alt="${escapeHtml(item.title)}"><div><h3>${escapeHtml(item.title)}</h3><p>${new Date(item.createdAt).toLocaleString("ja-JP")} · ${remainingTime(item.expiresAt)}</p><a class="button button-secondary" href="${objectUrl}" download="${escapeHtml(item.title)}.png">保存</a></div></article>`;
+    }).join("") : `<div class="empty-canvas"><span>◷</span><h2>履歴はまだありません</h2><p>採用候補を確定すると3日間保存されます。</p></div>`;
+  } catch (cause) {
+    $("#history-grid").innerHTML = `<div class="empty-canvas"><span>!</span><h2>履歴を開けませんでした</h2><p>${escapeHtml(cause.message)}</p></div>`;
   }
-  return trySetStored(STORAGE.history, history);
 }
 
-function deleteSelectedHistory() {
+function revokeHistoryObjectUrls() {
+  for (const url of state.historyObjectUrls) URL.revokeObjectURL(url);
+  state.historyObjectUrls = [];
+}
+
+async function deleteSelectedHistory() {
   if (!state.selectedHistoryIds.size) return;
-  const history = activeHistory().filter((item) => !state.selectedHistoryIds.has(item.id));
-  storeHistory(history);
+  await deleteHistoryEntries([...state.selectedHistoryIds]);
   state.selectedHistoryIds.clear();
-  renderHistory();
+  await renderHistory();
 }
 
-function clearHistory() {
-  if (!activeHistory().length) return;
+async function clearHistory() {
   if (!window.confirm("ブラウザに保存した画像履歴をすべて削除しますか？")) return;
-  localStorage.removeItem(STORAGE.history);
+  await clearHistoryEntries();
   state.selectedHistoryIds.clear();
-  renderHistory();
-}
-
-function historyStorageBytes() {
-  return new Blob([localStorage.getItem(STORAGE.history) || ""]).size;
+  await renderHistory();
 }
 
 function formatBytes(bytes) {
@@ -427,29 +428,28 @@ function initializeMode() {
   }
 }
 
-function activeTemplates() {
-  const now = Date.now();
-  const templates = getStored(STORAGE.templates, []).filter((item) => item.expiresAt > now);
-  trySetStored(STORAGE.templates, templates);
-  return templates;
-}
-
-function saveTemplate() {
+async function saveTemplate() {
   state.form = getFormData();
   if (!state.form.articleTitle) return alert("テンプレート名として案件名を入力してください。");
-  const templates = activeTemplates();
-  templates.unshift({ id: crypto.randomUUID(), name: state.form.articleTitle, data: state.form, createdAt: Date.now(), expiresAt: Date.now() + FIFTEEN_DAYS });
-  if (!trySetStored(STORAGE.templates, templates)) return alert("ブラウザの保存容量が不足しています。");
-  alert("テンプレートを15日間保存しました。");
+  try {
+    await saveTemplateEntry({ id: crypto.randomUUID(), name: state.form.articleTitle, data: state.form, createdAt: Date.now(), expiresAt: Date.now() + FIFTEEN_DAYS });
+    alert("テンプレートを15日間保存しました。");
+  } catch (cause) {
+    alert(`テンプレートを保存できませんでした: ${cause.message}`);
+  }
 }
 
-function renderTemplates() {
-  const templates = activeTemplates();
-  $("#template-list").innerHTML = templates.length ? templates.map((item) => `<article class="template-card"><div><h3>${escapeHtml(item.name)}</h3><p>期限：${new Date(item.expiresAt).toLocaleDateString("ja-JP")} · ${escapeHtml(item.data.direction || "")}</p></div><div class="template-actions"><button class="button button-primary" data-template-use="${item.id}">使う</button><button class="button button-secondary" data-template-renew="${item.id}">15日延長</button><button class="button button-secondary" data-template-delete="${item.id}">削除</button></div></article>`).join("") : `<div class="empty-canvas"><span>▤</span><h2>テンプレートはありません</h2><p>記事画像制作の右上から保存できます。</p></div>`;
+async function renderTemplates() {
+  try {
+    const templates = await listActiveTemplates();
+    $("#template-list").innerHTML = templates.length ? templates.map((item) => `<article class="template-card"><div><h3>${escapeHtml(item.name)}</h3><p>期限：${new Date(item.expiresAt).toLocaleDateString("ja-JP")} · ${escapeHtml(item.data.direction || "")}</p></div><div class="template-actions"><button class="button button-primary" data-template-use="${item.id}">使う</button><button class="button button-secondary" data-template-renew="${item.id}">15日延長</button><button class="button button-secondary" data-template-delete="${item.id}">削除</button></div></article>`).join("") : `<div class="empty-canvas"><span>▤</span><h2>テンプレートはありません</h2><p>記事画像制作の右上から保存できます。</p></div>`;
+  } catch (cause) {
+    $("#template-list").innerHTML = `<div class="empty-canvas"><span>!</span><h2>テンプレートを開けませんでした</h2><p>${escapeHtml(cause.message)}</p></div>`;
+  }
 }
 
-function templateAction(action, id) {
-  let templates = activeTemplates();
+async function templateAction(action, id) {
+  const templates = await listActiveTemplates();
   const item = templates.find((entry) => entry.id === id);
   if (!item) return;
   if (action === "use") {
@@ -461,10 +461,12 @@ function templateAction(action, id) {
     goStage(1);
     return;
   }
-  if (action === "renew") item.expiresAt = Date.now() + FIFTEEN_DAYS;
-  if (action === "delete") templates = templates.filter((entry) => entry.id !== id);
-  trySetStored(STORAGE.templates, templates);
-  renderTemplates();
+  if (action === "renew") {
+    item.expiresAt = Date.now() + FIFTEEN_DAYS;
+    await saveTemplateEntry(item);
+  }
+  if (action === "delete") await deleteTemplateEntries([id]);
+  await renderTemplates();
 }
 
 async function generateFree() {
@@ -553,7 +555,7 @@ function bindEvents() {
     if (!checkbox) return;
     if (checkbox.checked) state.selectedHistoryIds.add(checkbox.dataset.historySelect);
     else state.selectedHistoryIds.delete(checkbox.dataset.historySelect);
-    renderHistory();
+    void renderHistory();
   });
   $("#delete-selected-history").addEventListener("click", deleteSelectedHistory);
   $("#clear-history").addEventListener("click", clearHistory);
@@ -562,8 +564,27 @@ function bindEvents() {
   $("#cancel-github-token").addEventListener("click", cancelGithubToken);
 }
 
+async function initializeBrowserDatabase() {
+  const legacyHistory = getStored(LEGACY_STORAGE.history, []);
+  const legacyTemplates = getStored(LEGACY_STORAGE.templates, []);
+  await migrateLocalStorageHistory(legacyHistory, HISTORY_TTL);
+  await migrateLocalStorageTemplates(legacyTemplates);
+  try {
+    localStorage.removeItem(LEGACY_STORAGE.history);
+    localStorage.removeItem(LEGACY_STORAGE.templates);
+  } catch {
+    // IndexedDB remains the active store even when legacy storage is unavailable.
+  }
+  await listActiveHistory();
+  await listActiveTemplates();
+}
+
 initializeMode();
 bindEvents();
-activeTemplates();
-activeHistory();
-setInterval(activeHistory, 15 * 60 * 1000);
+initializeBrowserDatabase().catch((cause) => console.error("[IndexedDB]", cause.message));
+setInterval(async () => {
+  await listActiveHistory();
+  await listActiveTemplates();
+  if (state.view === "history") await renderHistory();
+  if (state.view === "templates") await renderTemplates();
+}, 15 * 60 * 1000);

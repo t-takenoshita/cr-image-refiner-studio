@@ -6,9 +6,9 @@
 
 - 記事画像制作: 依頼入力 → AI要件化 → 4案生成 → 確認 → 採用・修正
 - 記事案件に紐づかないフリー画像生成
-- 採用画像をブラウザのLocal Storageへ12時間保存
+- 採用画像をブラウザのIndexedDBへ3日間保存
 - 履歴画像の複数選択削除、全削除、使用容量表示
-- テンプレートをブラウザへ15日保存し、期限延長・削除
+- テンプレートをIndexedDBへ15日保存し、期限延長・削除
 - GitHub PagesからActionsを起動し、画面上で生成完了まで待機
 
 ## ローカル実行
@@ -52,14 +52,15 @@ tokenとサイトパスワードはブラウザの `sessionStorage` にだけ保
 - 参考画像: 非公開のDraft Releaseへ一時アップロードし、Actionの処理後に削除
 - 生成画像と結果JSON: 同じDraft Releaseに置き、12時間後に削除
 - Cleanup: `.github/workflows/cleanup-pages-results.yml` が毎時実行
-- 採用履歴: 各ブラウザのLocal Storageへ12時間保存。画面から個別・一括削除可能
+- 採用履歴: 各ブラウザのIndexedDBへ3日間保存。画面から個別・一括削除可能
+- テンプレート: 各ブラウザのIndexedDBへ15日保存
 
 GitHub Pagesは静的配信なので、ページそのものへ安全な共通パスワード認証を付けることはできません。生成操作はリポジトリ所有者のGitHub tokenがないと実行できません。UI自体も非公開にする必要がある場合は、アクセス制御を持つ別のホスティングが必要です。
 
 ## 保存先
 
 - ローカル生成画像: `.runtime/generated/`
-- ローカル履歴・テンプレート: ブラウザのLocal Storage
+- ローカル履歴・テンプレート: ブラウザのIndexedDB
 - ローカルAPIキー・サイトパスワード: `.env`
 - Pages一時画像: GitHub Draft Release（12時間で削除）
 
