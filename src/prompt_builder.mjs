@@ -202,7 +202,10 @@ export async function buildPromptPack(request, options = {}) {
     const colorPalette = colorPalettes[index];
     const variantWithPalette = applyTextContractToVariant(applyColorPalette(variant, colorPalette), textContract);
     const variantId = `${requestForPrompt.request_id}_v${index + 1}_${variantWithPalette.id}`;
-    const prompt = buildVariantPrompt(requestForPrompt, variantWithPalette, index, { textContract });
+    const prompt = buildVariantPrompt(requestForPrompt, variantWithPalette, index, {
+      textContract,
+      outputSize: options.outputSize
+    });
     const generationTags = {
       appeal_variant: variantWithPalette.appeal_variant_id || variantWithPalette.id,
       appeal_axis: variantWithPalette.appeal_axis,
@@ -263,16 +266,25 @@ export function buildVariantPrompt(request, variant, index = 0, options = {}) {
   const creativeTitle = request.creative_title || "未指定";
   const designToneHint = buildDesignToneHint(request);
   const textContract = options.textContract || variant.text_contract_object || buildTextContract(request);
+  const outputSize = options.outputSize || "1088x1088";
+  const [outputWidth, outputHeight] = outputSize === "auto"
+    ? [0, 0]
+    : outputSize.split("x").map(Number);
+  const outputShape = outputSize === "auto"
+    ? "内容に最適な縦横比"
+    : outputWidth === outputHeight
+      ? "正方形"
+      : outputWidth > outputHeight ? "横長" : "縦長";
 
   const lines = [
-    `Image2で日本語の正方形広告バナーを1枚生成してください。`,
+    `Image2で日本語の${outputShape}広告バナーを1枚生成してください。`,
     CREATIVE_PROMPT_PRINCIPLES.role,
     `案件: ${projectName}`,
     projectId ? `案件ID: ${projectId}` : "",
     `CR案の仮タイトル: ${creativeTitle}`,
     `商材: ${product}`,
     `想定媒体: ${media}`,
-    `サイズ: 1080x1080、スマホフィードで可読性が高い構図。`,
+    `サイズ: ${outputSize === "auto" ? "内容に最適なサイズを選ぶ" : `${outputSize}px`}、スマホで可読性が高い構図。`,
     `ターゲット: ${target}`,
     `狙う欲求・不安・比較軸: ${request.audience_insight || appeal}`,
     `訴求軸: ${appeal}`,

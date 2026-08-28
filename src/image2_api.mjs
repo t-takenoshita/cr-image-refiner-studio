@@ -1,11 +1,11 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { DEFAULT_IMAGE_QUALITY, DEFAULT_IMAGE_SIZE } from "./image_generation_config.mjs";
 
 export const DEFAULT_IMAGE2_API_CONFIG = Object.freeze({
   model: "gpt-image-2",
-  size: "1088x1088",
-  final_size: "1080x1080",
-  quality: "medium",
+  size: DEFAULT_IMAGE_SIZE,
+  quality: DEFAULT_IMAGE_QUALITY,
   output_format: "png",
   moderation: "auto",
   max_transient_retries: 2

@@ -81,6 +81,11 @@ h3 { margin-block-end: var(--space-xs); font-size: var(--text-md); }
 .field input:hover, .field textarea:hover, .field select:hover, .comment-box textarea:hover, .decision-card textarea:hover { background: var(--color-paper-2); }
 .field input:focus, .field textarea:focus, .field select:focus, .comment-box textarea:focus, .decision-card textarea:focus { border-color: var(--color-accent); outline-color: var(--color-focus); }
 .field input:disabled, .field textarea:disabled, .field select:disabled { opacity: .55; cursor: not-allowed; }
+.generation-settings { margin-block-start: var(--space-lg); padding: var(--space-md); border: var(--rule-thin) solid var(--color-rule); border-radius: var(--radius-sm); }
+.generation-settings legend { padding-inline: var(--space-xs); color: var(--color-ink); font-weight: 600; }
+.generation-settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: 0 var(--space-sm); }
+.generation-settings .field, .generation-settings-grid .field { margin-block-end: var(--space-sm); }
+.generation-settings > small, .settings-note { display: block; margin: 0; color: var(--color-muted); font-size: var(--text-sm); }
 .upload-zone { position: relative; display: grid; min-height: 17rem; place-items: center; align-content: center; gap: var(--space-xs); padding: var(--space-lg); overflow: hidden; border: var(--rule-thin) dashed var(--color-rule-2); border-radius: var(--radius-md); background: var(--color-paper); cursor: pointer; text-align: center; }
 .upload-zone.compact { min-height: 7rem; margin-block-start: var(--space-md); }
 .upload-zone input { position: absolute; width: 1px; height: 1px; opacity: 0; }

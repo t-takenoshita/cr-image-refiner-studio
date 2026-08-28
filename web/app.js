@@ -64,6 +64,10 @@ function escapeHtml(value = "") {
   return String(value).replace(/[&<>"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[char]));
 }
 
+function qualityLabel(quality = "medium") {
+  return ({ low: "低", medium: "標準", high: "高", auto: "AIに任せる" })[quality] || "標準";
+}
+
 function switchView(view) {
   if (state.view === "history" && view !== "history") revokeHistoryObjectUrls();
   state.view = view;
@@ -115,6 +119,8 @@ function getFormData() {
     direction: data.direction?.trim(),
     requiredCopy: data.requiredCopy?.trim(),
     offer: data.offer?.trim(),
+    imageSize: data.imageSize || "1088x1088",
+    imageQuality: data.imageQuality || "medium",
     tone: data.direction?.trim(),
     visualElements: data.problem?.trim(),
     submittedAt: state.form.submittedAt || new Date().toISOString()
@@ -156,7 +162,8 @@ function renderPlan() {
     ["変更理由", state.form.problem],
     ["方向性", state.form.direction],
     ["必須コピー", state.form.requiredCopy || "文字なし"],
-    ["オファー", state.form.offer || "指定なし"]
+    ["オファー", state.form.offer || "指定なし"],
+    ["生成設定", `${state.form.imageSize || "1088x1088"}・${qualityLabel(state.form.imageQuality)}`]
   ];
   $("#requirements").innerHTML = fields.map(([label, value]) => `<div class="requirement"><span>◇</span><div><b>${escapeHtml(label)}</b><br>${escapeHtml(value || "指定なし")}</div></div>`).join("");
   $("#variant-list").innerHTML = state.plan.variants.map((variant, index) => `<article class="variant-card"><span class="variant-index">0${index + 1}</span><div><h3>${escapeHtml(variant.tags?.color_palette_name || `構図案 ${index + 1}`)}</h3><p>${escapeHtml(variant.tags?.design_tone_hint || variant.tags?.composition || "依頼内容を維持した別構図")}</p></div></article>`).join("");
@@ -232,7 +239,11 @@ async function generateArticle() {
       updateGenerationStatus("参考画像をGitHubへ一時送信しています…", 10);
       const result = await runPagesJob(
         "article",
-        { form: state.form, comment },
+        {
+          form: state.form,
+          comment,
+          generationConfig: { size: state.form.imageSize, quality: state.form.imageQuality }
+        },
         [state.articleImage, ...state.references].filter(Boolean),
         ({ message, progress }) => updateGenerationStatus(message, progress)
       );
@@ -249,6 +260,7 @@ async function generateArticle() {
           body: JSON.stringify({
             prompt: `${variant.prompt}${comment ? `\n追加コメント: ${comment}` : ""}`,
             references: [state.articleImage, ...state.references].filter(Boolean),
+            generationConfig: { size: state.form.imageSize, quality: state.form.imageQuality },
             count: 1
           })
         });
@@ -557,6 +569,10 @@ async function generateFree() {
   error.textContent = "";
   if (!prompt) return error.textContent = "生成したい画像を入力してください。";
   const button = $("#generate-free");
+  const generationConfig = {
+    size: $("#free-image-size").value,
+    quality: $("#free-image-quality").value
+  };
   button.disabled = true;
   button.textContent = "生成しています…";
   $("#free-results").innerHTML = `<div class="spinner"></div><h2>画像を生成中</h2><p>構図を組み立てています。</p>`;
@@ -565,14 +581,14 @@ async function generateFree() {
     const result = PAGES_MODE
       ? await runPagesJob(
           "free",
-          { prompt, count: Number($("#free-count").value) },
+          { prompt, count: Number($("#free-count").value), generationConfig },
           state.freeReferences,
           ({ message }) => { $("#free-results").innerHTML = `<div class="spinner"></div><h2>画像を生成中</h2><p>${escapeHtml(message)}</p>`; }
         )
       : await api("/api/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt, references: state.freeReferences, count: Number($("#free-count").value) })
+          body: JSON.stringify({ prompt, references: state.freeReferences, count: Number($("#free-count").value), generationConfig })
         });
     $("#free-results").className = "free-result-grid";
     $("#free-results").innerHTML = result.images.map((image, index) => `<figure><img src="${image.dataUrl}" alt="フリー生成画像 ${index + 1}"><figcaption><a href="${image.dataUrl}" download="free-image-${index + 1}.png">画像を保存</a></figcaption></figure>`).join("");

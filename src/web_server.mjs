@@ -1,6 +1,7 @@
 import http from "node:http";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { imageSizePrompt, normalizeImageGenerationConfig } from "./image_generation_config.mjs";
 import { fileURLToPath } from "node:url";
 import { buildWebPlan } from "./web_plan.mjs";
 import { generateImage2File } from "./image2_api.mjs";
@@ -146,15 +147,16 @@ async function handleLogin(request, response, pathname) {
   return false;
 }
 
-async function generateOne({ prompt, references, apiKey, index = 1 }) {
+async function generateOne({ prompt, references, apiKey, generationConfig, index = 1 }) {
   const stamp = `${Date.now()}-${index}-${Math.random().toString(16).slice(2, 8)}`;
   const outputPath = path.join(OUTPUT_ROOT, `${stamp}.png`);
+  const normalizedConfig = normalizeImageGenerationConfig(generationConfig);
   await generateImage2File({
     apiKey,
-    prompt,
+    prompt: `${prompt}\n${imageSizePrompt(normalizedConfig.size)}`,
     outputPath,
     inputImages: (references || []).slice(0, 4),
-    config: { quality: "medium", size: "1088x1088", final_size: "1080x1080" }
+    config: normalizedConfig
   });
   const bytes = await fs.readFile(outputPath);
   return { id: stamp, dataUrl: `data:image/png;base64,${bytes.toString("base64")}` };
@@ -178,12 +180,14 @@ async function handleApi(request, response, pathname) {
     if (!apiKey) throw Object.assign(new Error(".env に OPENAI_API_KEY を設定してサーバーを再起動してください。"), { status: 401 });
     if (!body.prompt?.trim()) throw Object.assign(new Error("生成指示を入力してください。"), { status: 400 });
     const count = Math.min(4, Math.max(1, Number(body.count || 1)));
+    const generationConfig = normalizeImageGenerationConfig(body.generationConfig);
     const images = [];
     for (let index = 1; index <= count; index += 1) {
       const result = await generateOne({
         prompt: `${body.prompt}\n案${index}: 同じ要件を守りながら、構図・視線導線・背景表現を他案と明確に変える。`,
         references: body.references,
         apiKey,
+        generationConfig,
         index
       });
       images.push(result);

@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { buildWebPlan } from "../src/web_plan.mjs";
 import { generateImage2File } from "../src/image2_api.mjs";
+import { imageSizePrompt, normalizeImageGenerationConfig } from "../src/image_generation_config.mjs";
 import {
   decryptPagesBytes,
   decryptPagesPayload,
@@ -42,15 +43,16 @@ try {
   }
 
   const prompts = await promptsForJob(mode, payload);
+  const generationConfig = normalizeImageGenerationConfig(payload.generationConfig);
   const generatedAssets = [];
   for (let index = 0; index < prompts.length; index += 1) {
     const outputPath = path.join(workRoot, `image-${index + 1}.png`);
     await generateImage2File({
       apiKey,
-      prompt: prompts[index],
+      prompt: `${prompts[index]}\n${imageSizePrompt(generationConfig.size)}`,
       outputPath,
       inputImages: referencePaths,
-      config: { quality: "medium", size: "1088x1088", final_size: "1080x1080" }
+      config: generationConfig
     });
     const name = `crir-${requestId}-image-${index + 1}.png`;
     const blob = await createGitBlob({

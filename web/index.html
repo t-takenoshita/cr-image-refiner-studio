@@ -70,6 +70,14 @@
             <label class="upload-zone" for="article-image"><input id="article-image" type="file" accept="image/*"><span class="upload-icon">↑</span><strong>対象画像を選択</strong><small>PNG / JPG · 15MB程度まで</small><img id="article-preview" alt="選択画像のプレビュー"></label>
             <label class="upload-zone compact" for="reference-images"><input id="reference-images" type="file" accept="image/*" multiple><span>＋</span><strong>参考画像を追加</strong><small>最大3枚</small></label>
             <div class="thumb-row" id="reference-preview"></div>
+            <fieldset class="generation-settings">
+              <legend>生成設定</legend>
+              <div class="generation-settings-grid">
+                <div class="field"><label for="article-image-size">画像サイズ</label><select id="article-image-size" name="imageSize"><option value="1088x1088" selected>1088 × 1088（標準）</option><option value="1536x1024">1536 × 1024（横長）</option><option value="1024x1536">1024 × 1536（縦長）</option><option value="2048x2048">2048 × 2048（2K）</option><option value="2048x1152">2048 × 1152（2K横長）</option><option value="auto">AIに任せる</option></select></div>
+                <div class="field"><label for="article-image-quality">品質</label><select id="article-image-quality" name="imageQuality"><option value="low">低（速い・安い）</option><option value="medium" selected>標準</option><option value="high">高（時間・料金増）</option><option value="auto">AIに任せる</option></select></div>
+              </div>
+              <small>基本設定は1088 × 1088・標準です。サイズと品質で料金・生成時間が変わります。</small>
+            </fieldset>
             <div class="privacy-note"><span>●</span><p id="privacy-copy"><strong>Web完結型</strong><br>画像は生成時だけAPIへ送信します。Google Forms・Sheets・Chatworkは使いません。</p></div>
           </aside>
           <div class="form-actions"><span id="form-error" class="form-message" role="alert"></span><button class="button button-primary" type="submit">AIに要件を整理してもらう →</button></div>
@@ -86,7 +94,7 @@
     <section class="view" data-view-panel="free">
       <header class="page-head"><div><p class="mono-label">FREE GENERATION</p><h1>フリー画像生成</h1><p>記事案件に紐づけず、自由な指示から画像を作ります。</p></div></header>
       <section class="panel free-layout">
-        <div class="free-form"><div class="field"><label for="free-prompt">生成したい画像</label><textarea id="free-prompt" class="prompt-large" placeholder="例：自然光の入る白いクリニックで、30代の日本人男性が穏やかにカメラを見る広告写真。文字なし。"></textarea></div><div class="field"><label for="free-count">生成枚数</label><select id="free-count"><option value="1">1枚</option><option value="2">2枚</option><option value="4">4枚</option></select></div><label class="upload-zone compact" for="free-reference"><input id="free-reference" type="file" accept="image/*" multiple><span>＋</span><strong>参考画像を追加</strong><small>任意・最大4枚</small></label><div class="thumb-row" id="free-reference-preview"></div><button class="button button-primary" id="generate-free">画像を生成する →</button><p class="form-message" id="free-error" role="alert"></p></div>
+        <div class="free-form"><div class="field"><label for="free-prompt">生成したい画像</label><textarea id="free-prompt" class="prompt-large" placeholder="例：自然光の入る白いクリニックで、30代の日本人男性が穏やかにカメラを見る広告写真。文字なし。"></textarea></div><div class="generation-settings-grid"><div class="field"><label for="free-count">生成枚数</label><select id="free-count"><option value="1">1枚</option><option value="2">2枚</option><option value="4">4枚</option></select></div><div class="field"><label for="free-image-size">画像サイズ</label><select id="free-image-size"><option value="1088x1088" selected>1088 × 1088（標準）</option><option value="1536x1024">1536 × 1024（横長）</option><option value="1024x1536">1024 × 1536（縦長）</option><option value="2048x2048">2048 × 2048（2K）</option><option value="2048x1152">2048 × 1152（2K横長）</option><option value="auto">AIに任せる</option></select></div><div class="field"><label for="free-image-quality">品質</label><select id="free-image-quality"><option value="low">低（速い・安い）</option><option value="medium" selected>標準</option><option value="high">高（時間・料金増）</option><option value="auto">AIに任せる</option></select></div></div><p class="settings-note">基本設定は1088 × 1088・標準です。サイズと品質で料金・生成時間が変わります。</p><label class="upload-zone compact" for="free-reference"><input id="free-reference" type="file" accept="image/*" multiple><span>＋</span><strong>参考画像を追加</strong><small>任意・最大4枚</small></label><div class="thumb-row" id="free-reference-preview"></div><button class="button button-primary" id="generate-free">画像を生成する →</button><p class="form-message" id="free-error" role="alert"></p></div>
         <div><div class="empty-canvas" id="free-results"><span>✦</span><h2>生成結果</h2><p>指示を入力すると、ここに画像が表示されます。</p></div></div>
       </section>
     </section>
@@ -113,6 +121,6 @@
     </form>
   </dialog>
   <script type="module" src="./pages-auth.js?v=1"></script>
-  <script type="module" src="./app.js?v=11"></script>
+  <script type="module" src="./app.js?v=12"></script>
 </body>
 </html>

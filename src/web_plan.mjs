@@ -1,5 +1,6 @@
 import { normalizeRequestRow } from "./request_schema.mjs";
 import { buildPromptPack } from "./prompt_builder.mjs";
+import { normalizeImageGenerationConfig } from "./image_generation_config.mjs";
 
 export function requestRowFromWeb(body = {}) {
   return {
@@ -23,8 +24,12 @@ export function requestRowFromWeb(body = {}) {
 
 export async function buildWebPlan(body = {}, options = {}) {
   const now = options.now ? new Date(options.now) : new Date();
+  const generationConfig = normalizeImageGenerationConfig({
+    size: body.imageSize,
+    quality: body.imageQuality
+  });
   const request = normalizeRequestRow(requestRowFromWeb(body), { sourceKind: options.sourceKind || "web", now });
-  const promptPack = await buildPromptPack(request, { now });
+  const promptPack = await buildPromptPack(request, { now, outputSize: generationConfig.size });
   return {
     requestId: request.request_id,
     warnings: request.validation.warnings,
