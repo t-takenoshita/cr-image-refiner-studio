@@ -44,7 +44,7 @@
     <section class="view is-visible" data-view-panel="article">
       <header class="page-head">
         <div><p class="mono-label">ARTICLE CREATIVE</p><h1>記事画像制作</h1><p>依頼内容を整理し、方向性の異なる画像案を4枚生成します。</p></div>
-        <button class="button button-secondary" id="save-template" type="button">テンプレート保存</button>
+        <div class="page-head-actions"><span class="editing-badge" id="template-editing-label" hidden>テンプレート編集中</span><button class="button button-secondary" id="cancel-template-edit" type="button" hidden>編集をやめる</button><button class="button button-secondary" id="save-template" type="button">テンプレート保存</button></div>
       </header>
       <ol class="stepper" id="stepper" aria-label="制作進行">
         <li class="is-current"><span>1</span><b>依頼入力</b></li>
@@ -121,6 +121,6 @@
     </form>
   </dialog>
   <script type="module" src="./pages-auth.js?v=1"></script>
-  <script type="module" src="./app.js?v=12"></script>
+  <script type="module" src="./app.js?v=13"></script>
 </body>
 </html>

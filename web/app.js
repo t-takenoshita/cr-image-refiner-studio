@@ -48,6 +48,7 @@ const state = {
   selected: -1,
   selectedHistoryIds: new Set(),
   historyObjectUrls: [],
+  editingTemplateId: null,
   generating: false,
   generationController: null
 };
@@ -526,17 +527,51 @@ async function saveTemplate() {
   state.form = getFormData();
   if (!state.form.articleTitle) return alert("テンプレート名として案件名を入力してください。");
   try {
-    await saveTemplateEntry({ id: crypto.randomUUID(), name: state.form.articleTitle, data: state.form, createdAt: Date.now(), expiresAt: Date.now() + FIFTEEN_DAYS });
+    const now = Date.now();
+    if (state.editingTemplateId) {
+      const templates = await listActiveTemplates();
+      const current = templates.find((item) => item.id === state.editingTemplateId);
+      if (!current) throw new Error("更新するテンプレートが見つかりません。もう一度選び直してください。");
+      await saveTemplateEntry({
+        ...current,
+        name: state.form.articleTitle,
+        data: state.form,
+        updatedAt: now,
+        expiresAt: now + FIFTEEN_DAYS
+      });
+      setTemplateEditMode(null);
+      alert("テンプレート内容を更新し、保存期限を15日後へ延長しました。");
+      return;
+    }
+    await saveTemplateEntry({ id: crypto.randomUUID(), name: state.form.articleTitle, data: state.form, createdAt: now, updatedAt: now, expiresAt: now + FIFTEEN_DAYS });
     alert("テンプレートを15日間保存しました。");
   } catch (cause) {
     alert(`テンプレートを保存できませんでした: ${cause.message}`);
   }
 }
 
+function setTemplateEditMode(item) {
+  state.editingTemplateId = item?.id || null;
+  $("#template-editing-label").hidden = !item;
+  $("#template-editing-label").textContent = item ? `編集中：${item.name}` : "テンプレート編集中";
+  $("#cancel-template-edit").hidden = !item;
+  $("#save-template").textContent = item ? "内容を更新して15日延長" : "テンプレート保存";
+}
+
+function applyTemplateToForm(item, { editing = false } = {}) {
+  Object.entries(item.data).forEach(([key, value]) => {
+    const field = $(`[name="${key}"]`);
+    if (field) field.value = value || "";
+  });
+  setTemplateEditMode(editing ? item : null);
+  switchView("article");
+  goStage(1);
+}
+
 async function renderTemplates() {
   try {
     const templates = await listActiveTemplates();
-    $("#template-list").innerHTML = templates.length ? templates.map((item) => `<article class="template-card"><div><h3>${escapeHtml(item.name)}</h3><p>期限：${new Date(item.expiresAt).toLocaleDateString("ja-JP")} · ${escapeHtml(item.data.direction || "")}</p></div><div class="template-actions"><button class="button button-primary" data-template-use="${item.id}">使う</button><button class="button button-secondary" data-template-renew="${item.id}">15日延長</button><button class="button button-secondary" data-template-delete="${item.id}">削除</button></div></article>`).join("") : `<div class="empty-canvas"><span>▤</span><h2>テンプレートはありません</h2><p>記事画像制作の右上から保存できます。</p></div>`;
+    $("#template-list").innerHTML = templates.length ? templates.map((item) => `<article class="template-card"><div><h3>${escapeHtml(item.name)}</h3><p>期限：${new Date(item.expiresAt).toLocaleDateString("ja-JP")} · ${escapeHtml(item.data.direction || "")}</p></div><div class="template-actions"><button class="button button-primary" data-template-use="${item.id}">使う</button><button class="button button-secondary" data-template-edit="${item.id}">内容を編集</button><button class="button button-secondary" data-template-renew="${item.id}">期限を15日延長</button><button class="button button-secondary" data-template-delete="${item.id}">削除</button></div></article>`).join("") : `<div class="empty-canvas"><span>▤</span><h2>テンプレートはありません</h2><p>記事画像制作の右上から保存できます。</p></div>`;
   } catch (cause) {
     $("#template-list").innerHTML = `<div class="empty-canvas"><span>!</span><h2>テンプレートを開けませんでした</h2><p>${escapeHtml(cause.message)}</p></div>`;
   }
@@ -547,19 +582,22 @@ async function templateAction(action, id) {
   const item = templates.find((entry) => entry.id === id);
   if (!item) return;
   if (action === "use") {
-    Object.entries(item.data).forEach(([key, value]) => {
-      const field = $(`[name="${key}"]`);
-      if (field) field.value = value || "";
-    });
-    switchView("article");
-    goStage(1);
+    applyTemplateToForm(item);
+    return;
+  }
+  if (action === "edit") {
+    applyTemplateToForm(item, { editing: true });
     return;
   }
   if (action === "renew") {
+    item.updatedAt = Date.now();
     item.expiresAt = Date.now() + FIFTEEN_DAYS;
     await saveTemplateEntry(item);
   }
-  if (action === "delete") await deleteTemplateEntries([id]);
+  if (action === "delete") {
+    await deleteTemplateEntries([id]);
+    if (state.editingTemplateId === id) setTemplateEditMode(null);
+  }
   await renderTemplates();
 }
 
@@ -640,10 +678,12 @@ function bindEvents() {
   });
   $("#revise-final").addEventListener("click", () => goStage(3));
   $("#save-template").addEventListener("click", saveTemplate);
+  $("#cancel-template-edit").addEventListener("click", () => setTemplateEditMode(null));
   $("#template-list").addEventListener("click", (event) => {
     const button = event.target.closest("button");
     if (!button) return;
     if (button.dataset.templateUse) templateAction("use", button.dataset.templateUse);
+    if (button.dataset.templateEdit) templateAction("edit", button.dataset.templateEdit);
     if (button.dataset.templateRenew) templateAction("renew", button.dataset.templateRenew);
     if (button.dataset.templateDelete) templateAction("delete", button.dataset.templateDelete);
   });
