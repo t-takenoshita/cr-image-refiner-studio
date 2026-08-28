@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#f7f9ff">
+  <title>ログイン | CR Image Refiner</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css?v=4">
+</head>
+<body class="auth-page">
+  <main class="auth-shell">
+    <section class="auth-card" aria-labelledby="login-title">
+      <div class="brand auth-brand"><span class="brand-mark">CR</span><span><strong>Image Refiner</strong><small>Private studio</small></span></div>
+      <p class="mono-label">PRIVATE ACCESS</p>
+      <h1 id="login-title">スタジオにログイン</h1>
+      <p class="auth-lead">共有パスワードを入力してください。</p>
+      <form class="auth-form" method="post" action="/login">
+        <div class="field">
+          <label for="site-password">パスワード <span class="required-mark" aria-hidden="true">＊</span><span class="visually-hidden">必須</span></label>
+          <input id="site-password" name="password" type="password" required autofocus autocomplete="current-password">
+        </div>
+        <p class="auth-error" role="alert">{{ERROR}}</p>
+        <button class="button button-primary" type="submit">ログインする</button>
+      </form>
+      <p class="auth-note">認証はサーバー側で行われます。パスワードはブラウザに保存しません。</p>
+    </section>
+    <p class="auth-foot">CR Image Refiner · Restricted access</p>
+  </main>
+</body>
+</html>

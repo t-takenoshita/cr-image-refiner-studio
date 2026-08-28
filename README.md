@@ -7,11 +7,11 @@
 ```bash
 npm install
 cp .env.example .env
-# .env の OPENAI_API_KEY を実際のキーへ置き換える
+# .env の OPENAI_API_KEY と SITE_PASSWORD を実際の値へ置き換える
 npm run dev
 ```
 
-ブラウザで `http://localhost:3000/studio` を開きます。`gpt-image-2` のAPIキーはプロジェクト直下の `.env` に `OPENAI_API_KEY=...` として設定します。`.env` はGit管理対象外で、キーはブラウザへ送信しません。変更後はサーバーを再起動してください。
+ブラウザで `http://localhost:3000/studio` を開きます。`gpt-image-2` のAPIキーはプロジェクト直下の `.env` に `OPENAI_API_KEY=...` として設定します。サイトの共有パスワードは同じファイルに `SITE_PASSWORD=...` として設定します。`.env` はGit管理対象外で、どちらの値もブラウザへ保存しません。変更後はサーバーを再起動してください。
 
 主な画面:
 

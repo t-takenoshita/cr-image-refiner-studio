@@ -5,6 +5,12 @@ import { fileURLToPath } from "node:url";
 import { normalizeRequestRow } from "./request_schema.mjs";
 import { buildPromptPack } from "./prompt_builder.mjs";
 import { generateImage2File } from "./image2_api.mjs";
+import {
+  clearSessionCookie,
+  createSessionCookie,
+  isAuthenticated,
+  isValidPassword
+} from "./web_auth.mjs";
 
 const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const WEB_ROOT = path.join(PROJECT_ROOT, "web");
@@ -19,7 +25,11 @@ if (typeof process.loadEnvFile === "function") {
 }
 
 const PORT = Number(process.env.PORT || 3000);
+const SITE_PASSWORD = process.env.SITE_PASSWORD || "";
 const MAX_BODY_BYTES = 28 * 1024 * 1024;
+const LOGIN_WINDOW_MS = 10 * 60 * 1000;
+const LOGIN_ATTEMPT_LIMIT = 5;
+const loginAttempts = new Map();
 
 const MIME = new Map([
   [".html", "text/html; charset=utf-8"],
@@ -41,6 +51,16 @@ function sendJson(response, status, body) {
 }
 
 async function readJson(request) {
+  const text = await readBody(request);
+  if (!text) return {};
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw Object.assign(new Error("JSONの形式が不正です。"), { status: 400 });
+  }
+}
+
+async function readBody(request) {
   const chunks = [];
   let size = 0;
   for await (const chunk of request) {
@@ -48,12 +68,83 @@ async function readJson(request) {
     if (size > MAX_BODY_BYTES) throw Object.assign(new Error("送信データが大きすぎます。"), { status: 413 });
     chunks.push(chunk);
   }
-  if (!chunks.length) return {};
-  try {
-    return JSON.parse(Buffer.concat(chunks).toString("utf8"));
-  } catch {
-    throw Object.assign(new Error("JSONの形式が不正です。"), { status: 400 });
+  return chunks.length ? Buffer.concat(chunks).toString("utf8") : "";
+}
+
+function sendRedirect(response, location, headers = {}) {
+  response.writeHead(303, { Location: location, "Cache-Control": "no-store", ...headers });
+  response.end();
+}
+
+function isSecureRequest(request) {
+  return Boolean(request.socket.encrypted) || request.headers["x-forwarded-proto"] === "https";
+}
+
+function loginClientId(request) {
+  return request.socket.remoteAddress || "unknown";
+}
+
+function loginAttemptState(clientId) {
+  const now = Date.now();
+  const current = loginAttempts.get(clientId);
+  if (!current || now - current.startedAt > LOGIN_WINDOW_MS) {
+    const fresh = { count: 0, startedAt: now };
+    loginAttempts.set(clientId, fresh);
+    return fresh;
   }
+  return current;
+}
+
+function escapeHtml(value = "") {
+  return String(value).replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  })[character]);
+}
+
+async function serveLogin(response, errorMessage = "", status = 200) {
+  const template = await fs.readFile(path.join(WEB_ROOT, "login.html"), "utf8");
+  const content = template.replace("{{ERROR}}", escapeHtml(errorMessage));
+  response.writeHead(status, {
+    "Content-Type": "text/html; charset=utf-8",
+    "Cache-Control": "no-store",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY"
+  });
+  response.end(content);
+}
+
+async function handleLogin(request, response, pathname) {
+  const secure = isSecureRequest(request);
+  if (pathname === "/login" && request.method === "GET") {
+    if (isAuthenticated(request.headers, SITE_PASSWORD)) sendRedirect(response, "/studio");
+    else await serveLogin(response);
+    return true;
+  }
+
+  if (pathname === "/login" && request.method === "POST") {
+    const clientId = loginClientId(request);
+    const attempts = loginAttemptState(clientId);
+    if (attempts.count >= LOGIN_ATTEMPT_LIMIT) {
+      await serveLogin(response, "入力回数が多すぎます。10分ほど待ってから再度お試しください。", 429);
+      return true;
+    }
+    const form = new URLSearchParams(await readBody(request));
+    if (!isValidPassword(form.get("password"), SITE_PASSWORD)) {
+      attempts.count += 1;
+      await serveLogin(response, "パスワードが違います。", 401);
+      return true;
+    }
+    loginAttempts.delete(clientId);
+    sendRedirect(response, "/studio", { "Set-Cookie": createSessionCookie(SITE_PASSWORD, { secure }) });
+    return true;
+  }
+
+  if (pathname === "/logout" && request.method === "POST") {
+    sendRedirect(response, "/login", { "Set-Cookie": clearSessionCookie({ secure }) });
+    return true;
+  }
+
+  return false;
 }
 
 function requestRowFromWeb(body = {}) {
@@ -172,6 +263,19 @@ async function serveStatic(response, pathname) {
 const server = http.createServer(async (request, response) => {
   try {
     const url = new URL(request.url, `http://${request.headers.host || `localhost:${PORT}`}`);
+    if (await handleLogin(request, response, url.pathname)) return;
+    if (request.method === "GET" && ["/styles.css", "/tokens.css"].includes(url.pathname)) {
+      await serveStatic(response, url.pathname);
+      return;
+    }
+    if (!isAuthenticated(request.headers, SITE_PASSWORD)) {
+      if (url.pathname.startsWith("/api/")) {
+        sendJson(response, 401, { error: "ログインが必要です。", loginRequired: true });
+      } else {
+        sendRedirect(response, "/login");
+      }
+      return;
+    }
     if (await handleApi(request, response, url.pathname)) return;
     if (request.method !== "GET") return sendJson(response, 405, { error: "Method not allowed" });
     await serveStatic(response, url.pathname);
@@ -180,6 +284,10 @@ const server = http.createServer(async (request, response) => {
     sendJson(response, error.status || 500, { error: error.message || "サーバーエラーが発生しました。" });
   }
 });
+
+if (!SITE_PASSWORD) {
+  throw new Error(".env に SITE_PASSWORD を設定してください。");
+}
 
 server.listen(PORT, "127.0.0.1", () => {
   console.log(`CR Image Refiner: http://localhost:${PORT}/studio`);

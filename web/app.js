@@ -87,6 +87,10 @@ function getFormData() {
 async function api(path, options = {}) {
   const response = await fetch(path, options);
   const payload = await response.json().catch(() => ({}));
+  if (response.status === 401 && payload.loginRequired) {
+    window.location.assign("/login");
+    throw new Error("ログインが必要です。");
+  }
   if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
   return payload;
 }

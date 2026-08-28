@@ -28,6 +28,8 @@ h3 { margin-block-end: var(--space-xs); font-size: var(--text-md); }
 .brand strong { color: var(--color-ink); font-family: var(--font-display); }
 .brand small { color: var(--color-muted); font-size: var(--text-xs); }
 .sidebar nav { display: grid; gap: var(--space-2xs); }
+.logout-form { margin-block-start: var(--space-md); }
+.logout-button { width: 100%; }
 .nav-item { display: flex; align-items: center; gap: var(--space-sm); min-height: 48px; padding-inline: var(--space-sm); border: var(--rule-thin) solid transparent; border-radius: var(--radius-sm); background: transparent; cursor: pointer; text-align: start; white-space: nowrap; transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
 .nav-item span { width: 1.5rem; color: var(--color-muted); font-family: var(--font-mono); text-align: center; }
 .nav-item.is-active { border-color: var(--color-rule); background: var(--color-accent-soft); color: var(--color-accent); font-weight: 600; }
@@ -150,6 +152,18 @@ h3 { margin-block-end: var(--space-xs); font-size: var(--text-md); }
 .template-actions { display: flex; flex-wrap: wrap; gap: var(--space-xs); }
 .template-actions .button { min-height: 40px; }
 .foot-line { display: flex; flex-direction: column; gap: var(--space-xs); max-width: 92rem; margin: var(--space-3xl) auto 0; padding-block-start: var(--space-md); border-block-start: var(--rule-thin) solid var(--color-rule); color: var(--color-muted); font: var(--text-xs)/1.5 var(--font-body); }
+
+.auth-page { min-height: 100dvh; background: var(--color-paper-2); }
+.auth-shell { display: grid; min-height: 100dvh; place-items: center; align-content: center; gap: var(--space-lg); padding: var(--space-lg); }
+.auth-card { width: min(29rem, 100%); padding: clamp(var(--space-lg), 5vw, var(--space-2xl)); border: var(--rule-thin) solid var(--color-rule); border-radius: var(--radius-lg); background: var(--color-paper); box-shadow: 0 24px 60px color-mix(in oklch, var(--color-ink) 8%, transparent); }
+.auth-brand { margin-block-end: var(--space-2xl); }
+.auth-card h1 { margin-block-end: var(--space-sm); font-size: clamp(2rem, 8vw, 2.75rem); }
+.auth-lead { margin-block-end: var(--space-xl); color: var(--color-muted); }
+.auth-form .field { margin-block-end: var(--space-sm); }
+.auth-form .button { width: 100%; }
+.auth-error { min-height: 1.5lh; margin-block-end: var(--space-sm); color: var(--color-error); font-size: var(--text-sm); }
+.auth-note { margin: var(--space-lg) 0 0; padding-block-start: var(--space-md); border-block-start: var(--rule-thin) solid var(--color-rule); color: var(--color-muted); font-size: var(--text-xs); }
+.auth-foot { margin: 0; color: var(--color-muted); font: var(--text-xs)/1.5 var(--font-mono); text-align: center; }
 
 @media (hover: hover) and (pointer: fine) {
   .nav-item:hover, .button-secondary:hover { background: var(--color-paper-2); }
