@@ -68,6 +68,30 @@ export async function replaceReleaseAsset(options) {
   return uploadReleaseAsset(options);
 }
 
+export async function createGitBlob({ owner, repo, bytes, token, fetchImpl = fetch }) {
+  const response = await githubFetch(
+    `https://api.github.com/repos/${owner}/${repo}/git/blobs`,
+    {
+      method: "POST",
+      token,
+      fetchImpl,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: Buffer.from(bytes).toString("base64"), encoding: "base64" })
+    }
+  );
+  return response.json();
+}
+
+export async function downloadGitBlob({ owner, repo, sha, token, fetchImpl = fetch }) {
+  const response = await githubFetch(
+    `https://api.github.com/repos/${owner}/${repo}/git/blobs/${encodeURIComponent(sha)}`,
+    { token, fetchImpl }
+  );
+  const body = await response.json();
+  if (body.encoding !== "base64" || !body.content) throw new Error("Git blob response did not contain base64 data.");
+  return Buffer.from(String(body.content).replace(/\s+/g, ""), "base64");
+}
+
 async function githubFetch(url, options = {}) {
   if (!options.token) throw new Error("GitHub token is missing.");
   const response = await options.fetchImpl(url, {

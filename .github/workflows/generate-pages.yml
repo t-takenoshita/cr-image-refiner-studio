@@ -23,8 +23,8 @@ on:
         description: Draft release used as temporary storage
         required: true
         type: string
-      reference_assets:
-        description: JSON array of temporary reference asset names
+      reference_blobs:
+        description: JSON array of encrypted Git blob SHAs
         required: false
         default: "[]"
         type: string
@@ -66,5 +66,5 @@ jobs:
           INPUT_MODE: ${{ inputs.mode }}
           INPUT_PAYLOAD: ${{ inputs.payload }}
           INPUT_RELEASE_ID: ${{ inputs.release_id }}
-          INPUT_REFERENCE_ASSETS: ${{ inputs.reference_assets }}
+          INPUT_REFERENCE_BLOBS: ${{ inputs.reference_blobs }}
         run: node scripts/github_pages_job.mjs

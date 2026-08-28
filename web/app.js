@@ -13,7 +13,7 @@ import {
   saveSitePassword,
   validateGithubToken,
   waitForPagesGeneration
-} from "./github-pages.js?v=2";
+} from "./github-pages.js?v=3";
 import {
   clearHistoryEntries,
   deleteHistoryEntries,
@@ -206,6 +206,7 @@ async function runPagesJob(mode, payload, references, onStatus) {
     const job = await dispatchPagesGeneration({ token, sitePassword, mode, payload, references });
     return await waitForPagesGeneration({
       token,
+      sitePassword,
       job,
       signal: state.generationController?.signal,
       onStatus

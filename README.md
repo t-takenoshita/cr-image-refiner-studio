@@ -51,8 +51,8 @@ GitHub接続画面から暗号化済み接続ファイルを書き出し、同�
 
 ### 一時画像の扱い
 
-- 参考画像: 非公開のDraft Releaseへ一時アップロードし、Actionの処理後に削除
-- 生成画像と結果JSON: 同じDraft Releaseに置き、12時間後に削除
+- 参考画像・生成画像: サイトパスワードでAES-GCM暗号化し、GitHub Git Blobとして受け渡し
+- 完了通知: 非公開のDraft Releaseへ置き、12時間後に削除。通知削除後は暗号化Blobを参照できません
 - Cleanup: `.github/workflows/cleanup-pages-results.yml` が毎時実行
 - 採用履歴: 各ブラウザのIndexedDBへ3日間保存。画面から個別・一括削除可能
 - テンプレート: 各ブラウザのIndexedDBへ15日保存

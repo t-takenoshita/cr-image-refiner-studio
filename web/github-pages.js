@@ -16,6 +16,8 @@ const TOKEN_KEY = "crir_github_token";
 const PASSWORD_KEY = "crir_site_password";
 const TOKEN_VAULT_ID = "github-token-v1";
 const TOKEN_VAULT_ITERATIONS = 310_000;
+const BINARY_ITERATIONS = 210_000;
+const BINARY_MAGIC = new TextEncoder().encode("CRIR1");
 
 export function isPagesMode() {
   return window.location.hostname.endsWith(".github.io")
@@ -107,16 +109,13 @@ export async function dispatchPagesGeneration({ token, sitePassword, mode, paylo
   if (!sitePassword) throw new Error("サイトパスワードを入力してください。");
   const requestId = crypto.randomUUID();
   const release = await ensureRuntimeRelease(token);
-  const referenceAssets = [];
-  try {
-    for (let index = 0; index < references.length; index += 1) {
-      const blob = dataUrlToBlob(references[index]);
-      const extension = extensionForMime(blob.type);
-      const name = `crir-${requestId}-reference-${index + 1}.${extension}`;
-      await uploadReleaseAsset({ token, releaseId: release.id, name, blob });
-      referenceAssets.push(name);
-    }
+  const referenceBlobs = [];
+  for (let index = 0; index < references.length; index += 1) {
+    const blob = dataUrlToBlob(references[index]);
+    referenceBlobs.push(await uploadEncryptedGitBlob({ token, password: sitePassword, blob }));
+  }
 
+  try {
     await githubJson(
       `https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/actions/workflows/${CONFIG.workflow}/dispatches`,
       {
@@ -129,16 +128,13 @@ export async function dispatchPagesGeneration({ token, sitePassword, mode, paylo
             mode,
             payload: await encryptPayload(payload, sitePassword),
             release_id: String(release.id),
-            reference_assets: JSON.stringify(referenceAssets)
+            reference_blobs: JSON.stringify(referenceBlobs)
           }
         },
         allowEmpty: true
       }
     );
-  } catch (error) {
-    await deleteNamedAssets(token, release.id, referenceAssets).catch(() => {});
-    throw error;
-  }
+  } catch (error) { throw error; }
 
   return { requestId, releaseId: release.id, startedAt: Date.now() };
 }
@@ -180,8 +176,68 @@ async function encryptPayload(payload, password) {
 
 function bytesToBase64(bytes) {
   let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+  }
   return btoa(binary);
+}
+
+async function encryptBinaryBytes(bytes, password, mime = "application/octet-stream") {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const mimeBytes = new TextEncoder().encode(String(mime || "application/octet-stream"));
+  if (mimeBytes.length > 255) throw new Error("画像形式が不正です。");
+  const key = await deriveBinaryKey(password, salt, ["encrypt"]);
+  const encrypted = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, bytes));
+  const envelope = new Uint8Array(5 + 16 + 12 + 1 + mimeBytes.length + encrypted.length);
+  let offset = 0;
+  envelope.set(BINARY_MAGIC, offset); offset += 5;
+  envelope.set(salt, offset); offset += 16;
+  envelope.set(iv, offset); offset += 12;
+  envelope[offset] = mimeBytes.length; offset += 1;
+  envelope.set(mimeBytes, offset); offset += mimeBytes.length;
+  envelope.set(encrypted, offset);
+  return envelope;
+}
+
+async function decryptBinaryBytes(envelope, password) {
+  try {
+    if (envelope.length < 50 || !BINARY_MAGIC.every((byte, index) => envelope[index] === byte)) {
+      throw new Error("invalid binary envelope");
+    }
+    const salt = envelope.slice(5, 21);
+    const iv = envelope.slice(21, 33);
+    const mimeLength = envelope[33];
+    const dataOffset = 34 + mimeLength;
+    if (dataOffset + 16 > envelope.length) throw new Error("truncated binary envelope");
+    const mime = new TextDecoder().decode(envelope.slice(34, dataOffset)) || "application/octet-stream";
+    const key = await deriveBinaryKey(password, salt, ["decrypt"]);
+    const bytes = new Uint8Array(await crypto.subtle.decrypt(
+      { name: "AES-GCM", iv },
+      key,
+      envelope.slice(dataOffset)
+    ));
+    return { bytes, mime };
+  } catch {
+    throw new Error("生成画像を復号できません。再ログインしてからもう一度お試しください。");
+  }
+}
+
+async function deriveBinaryKey(password, salt, usages) {
+  const material = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(password),
+    "PBKDF2",
+    false,
+    ["deriveKey"]
+  );
+  return crypto.subtle.deriveKey(
+    { name: "PBKDF2", hash: "SHA-256", salt, iterations: BINARY_ITERATIONS },
+    material,
+    { name: "AES-GCM", length: 256 },
+    false,
+    usages
+  );
 }
 
 async function encryptSecret(secret, password) {
@@ -250,7 +306,7 @@ function base64ToBytes(value) {
   return Uint8Array.from(binary, (character) => character.charCodeAt(0));
 }
 
-export async function waitForPagesGeneration({ token, job, signal, onStatus = () => {} }) {
+export async function waitForPagesGeneration({ token, sitePassword, job, signal, onStatus = () => {} }) {
   const deadline = Date.now() + 30 * 60 * 1000;
   let run = null;
 
@@ -274,7 +330,7 @@ export async function waitForPagesGeneration({ token, job, signal, onStatus = ()
         : Math.min(deadline, Date.now() + 20_000);
       let result;
       try {
-        result = await waitForResultAsset({ token, job, signal, deadline: resultDeadline });
+        result = await waitForResultAsset({ token, sitePassword, job, signal, deadline: resultDeadline });
       } catch (error) {
         if (run.conclusion !== "success") {
           throw new Error(`GitHub Actionsが${run.conclusion || "失敗"}で終了しました。Actions画面でログを確認してください。`);
@@ -284,7 +340,8 @@ export async function waitForPagesGeneration({ token, job, signal, onStatus = ()
       if (result.status !== "completed") throw new Error(result.error || "画像生成に失敗しました。");
       const images = [];
       for (const image of result.images || []) {
-        const dataUrl = await downloadAssetAsDataUrl(token, image.apiUrl, signal);
+        const decrypted = await downloadEncryptedGitBlob(token, image.blobSha, sitePassword, signal);
+        const dataUrl = await blobToDataUrl(new Blob([decrypted.bytes], { type: decrypted.mime || image.mime || "image/png" }));
         images.push({ id: image.name, dataUrl, expiresAt: result.expiresAt });
       }
       onStatus({ phase: "completed", message: "生成が完了しました。", progress: 100 });
@@ -330,46 +387,33 @@ async function ensureRuntimeRelease(token) {
   }
 }
 
-async function waitForResultAsset({ token, job, signal, deadline }) {
-  const name = `crir-${job.requestId}-result.json`;
+async function waitForResultAsset({ token, sitePassword, job, signal, deadline }) {
+  const markerPattern = new RegExp(`^crir-${job.requestId}-result-([a-f0-9]{40,64})\\.marker$`);
   while (Date.now() < deadline) {
     throwIfAborted(signal);
     const assets = await listReleaseAssets(token, job.releaseId, signal);
-    const asset = assets.find((item) => item.name === name);
-    if (asset) {
-      const response = await githubFetch(asset.url, {
-        token,
-        signal,
-        headers: { Accept: "application/octet-stream" }
-      });
-      return response.json();
+    const marker = assets.find((item) => markerPattern.test(item.name));
+    if (marker) {
+      const sha = marker.name.match(markerPattern)?.[1];
+      const decrypted = await downloadEncryptedGitBlob(token, sha, sitePassword, signal);
+      return JSON.parse(new TextDecoder().decode(decrypted.bytes));
     }
     await delay(3000, signal);
   }
   throw new Error("生成結果を取得できませんでした。");
 }
 
-async function uploadReleaseAsset({ token, releaseId, name, blob }) {
-  return githubJson(
-    `https://uploads.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/releases/${releaseId}/assets?name=${encodeURIComponent(name)}`,
+async function uploadEncryptedGitBlob({ token, password, blob }) {
+  const encrypted = await encryptBinaryBytes(new Uint8Array(await blob.arrayBuffer()), password, blob.type);
+  const result = await githubJson(
+    `https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/git/blobs`,
     {
       method: "POST",
       token,
-      headers: { "Content-Type": blob.type || "application/octet-stream" },
-      body: blob,
-      rawBody: true
+      body: { content: bytesToBase64(encrypted), encoding: "base64" }
     }
   );
-}
-
-async function deleteNamedAssets(token, releaseId, names) {
-  const assets = await listReleaseAssets(token, releaseId);
-  for (const asset of assets.filter((item) => names.includes(item.name))) {
-    await githubJson(
-      `https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/releases/assets/${asset.id}`,
-      { method: "DELETE", token, allowEmpty: true }
-    );
-  }
+  return result.sha;
 }
 
 async function listReleaseAssets(token, releaseId, signal) {
@@ -379,13 +423,14 @@ async function listReleaseAssets(token, releaseId, signal) {
   );
 }
 
-async function downloadAssetAsDataUrl(token, apiUrl, signal) {
-  const response = await githubFetch(apiUrl, {
-    token,
-    signal,
-    headers: { Accept: "application/octet-stream" }
-  });
-  return blobToDataUrl(await response.blob());
+async function downloadEncryptedGitBlob(token, sha, password, signal) {
+  if (!/^[a-f0-9]{40,64}$/i.test(String(sha || ""))) throw new Error("生成画像の識別子が不正です。");
+  const result = await githubJson(
+    `https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/git/blobs/${encodeURIComponent(sha)}`,
+    { token, signal }
+  );
+  if (result.encoding !== "base64" || !result.content) throw new Error("生成画像データを取得できませんでした。");
+  return decryptBinaryBytes(base64ToBytes(String(result.content).replace(/\s+/g, "")), password);
 }
 
 async function githubJson(url, options = {}) {
@@ -436,13 +481,6 @@ function blobToDataUrl(blob) {
     reader.onerror = reject;
     reader.readAsDataURL(blob);
   });
-}
-
-function extensionForMime(mime) {
-  if (mime.includes("jpeg")) return "jpg";
-  if (mime.includes("webp")) return "webp";
-  if (mime.includes("gif")) return "gif";
-  return "png";
 }
 
 function delay(milliseconds, signal) {

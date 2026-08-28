@@ -2,12 +2,15 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { buildWebPlan } from "../src/web_plan.mjs";
 import { generateImage2File } from "../src/image2_api.mjs";
-import { decryptPagesPayload } from "../src/pages_payload_crypto.mjs";
 import {
-  deleteReleaseAsset,
-  downloadReleaseAsset,
+  decryptPagesBytes,
+  decryptPagesPayload,
+  encryptPagesBytes
+} from "../src/pages_payload_crypto.mjs";
+import {
+  createGitBlob,
+  downloadGitBlob,
   githubRepository,
-  listReleaseAssets,
   replaceReleaseAsset
 } from "../src/github_release_runtime.mjs";
 
@@ -18,32 +21,22 @@ const releaseId = Number(process.env.INPUT_RELEASE_ID || 0);
 const requestId = safeRequestId(process.env.INPUT_REQUEST_ID || "");
 const mode = process.env.INPUT_MODE === "free" ? "free" : "article";
 const payload = decryptPagesPayload(process.env.INPUT_PAYLOAD, sitePassword);
-const referenceNames = parseJson(process.env.INPUT_REFERENCE_ASSETS, []);
+const referenceBlobs = parseJson(process.env.INPUT_REFERENCE_BLOBS, []);
 const { owner, repo } = githubRepository();
 const workRoot = path.resolve(".runtime", "github-pages", requestId);
-const resultName = `crir-${requestId}-result.json`;
-
 if (!token) throw new Error("GITHUB_TOKEN is missing.");
 if (!apiKey) throw new Error("OPENAI_API_KEY repository secret is missing.");
 if (!sitePassword) throw new Error("SITE_PASSWORD repository secret is missing.");
 if (!releaseId) throw new Error("release_id is missing.");
 
 await fs.mkdir(workRoot, { recursive: true });
-let referenceAssets = [];
 
 try {
-  const allAssets = await listReleaseAssets({ owner, repo, releaseId, token });
-  referenceAssets = referenceNames.map((name) => {
-    const asset = allAssets.find((entry) => entry.name === name);
-    if (!asset) throw new Error(`reference asset was not found: ${name}`);
-    return asset;
-  });
-
   const referencePaths = [];
-  for (let index = 0; index < referenceAssets.length; index += 1) {
-    const asset = referenceAssets[index];
-    const bytes = await downloadReleaseAsset({ owner, repo, assetId: asset.id, token });
-    const localPath = path.join(workRoot, `reference-${index + 1}${path.extname(asset.name) || ".png"}`);
+  for (let index = 0; index < referenceBlobs.length; index += 1) {
+    const encrypted = await downloadGitBlob({ owner, repo, sha: safeBlobSha(referenceBlobs[index]), token });
+    const { bytes, mime } = decryptPagesBytes(encrypted, sitePassword);
+    const localPath = path.join(workRoot, `reference-${index + 1}.${extensionForMime(mime)}`);
     await fs.writeFile(localPath, bytes);
     referencePaths.push(localPath);
   }
@@ -60,16 +53,13 @@ try {
       config: { quality: "medium", size: "1088x1088", final_size: "1080x1080" }
     });
     const name = `crir-${requestId}-image-${index + 1}.png`;
-    const asset = await replaceReleaseAsset({
+    const blob = await createGitBlob({
       owner,
       repo,
-      releaseId,
-      name,
-      bytes: await fs.readFile(outputPath),
-      contentType: "image/png",
+      bytes: encryptPagesBytes(await fs.readFile(outputPath), sitePassword, "image/png"),
       token
     });
-    generatedAssets.push({ id: asset.id, name: asset.name, apiUrl: asset.url });
+    generatedAssets.push({ id: name, name, blobSha: blob.sha, mime: "image/png" });
   }
 
   const createdAt = new Date();
@@ -81,15 +71,13 @@ try {
     expiresAt: new Date(createdAt.getTime() + 12 * 60 * 60 * 1000).toISOString(),
     images: generatedAssets
   };
-  await replaceReleaseAsset({
+  const manifest = await createGitBlob({
     owner,
     repo,
-    releaseId,
-    name: resultName,
-    bytes: Buffer.from(JSON.stringify(result)),
-    contentType: "application/json",
+    bytes: encryptPagesBytes(Buffer.from(JSON.stringify(result)), sitePassword, "application/json"),
     token
   });
+  await uploadResultMarker(manifest.sha);
   console.log(`Generated ${generatedAssets.length} image(s) for ${requestId}.`);
 } catch (error) {
   const failed = {
@@ -101,28 +89,31 @@ try {
     error: safeError(error)
   };
   try {
-    await replaceReleaseAsset({
+    const manifest = await createGitBlob({
       owner,
       repo,
-      releaseId,
-      name: resultName,
-      bytes: Buffer.from(JSON.stringify(failed)),
-      contentType: "application/json",
+      bytes: encryptPagesBytes(Buffer.from(JSON.stringify(failed)), sitePassword, "application/json"),
       token
     });
+    await uploadResultMarker(manifest.sha);
   } catch (uploadError) {
     console.error(`Could not upload failure result: ${safeError(uploadError)}`);
   }
   throw error;
 } finally {
-  for (const asset of referenceAssets) {
-    try {
-      await deleteReleaseAsset({ owner, repo, assetId: asset.id, token });
-    } catch (error) {
-      console.error(`Could not delete reference ${asset.name}: ${safeError(error)}`);
-    }
-  }
   await fs.rm(workRoot, { recursive: true, force: true });
+}
+
+async function uploadResultMarker(manifestSha) {
+  await replaceReleaseAsset({
+    owner,
+    repo,
+    releaseId,
+    name: `crir-${requestId}-result-${safeBlobSha(manifestSha)}.marker`,
+    bytes: Buffer.from("CRIR"),
+    contentType: "application/octet-stream",
+    token
+  });
 }
 
 async function promptsForJob(jobMode, jobPayload) {
@@ -155,6 +146,19 @@ function safeRequestId(value) {
   const normalized = String(value).trim();
   if (!/^[a-zA-Z0-9-]{8,80}$/.test(normalized)) throw new Error("request_id is invalid.");
   return normalized;
+}
+
+function safeBlobSha(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (!/^[a-f0-9]{40,64}$/.test(normalized)) throw new Error("Git blob SHA is invalid.");
+  return normalized;
+}
+
+function extensionForMime(mime) {
+  if (String(mime).includes("jpeg")) return "jpg";
+  if (String(mime).includes("webp")) return "webp";
+  if (String(mime).includes("gif")) return "gif";
+  return "png";
 }
 
 function safeError(error) {
