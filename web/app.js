@@ -69,13 +69,21 @@ function qualityLabel(quality = "medium") {
   return ({ low: "低", medium: "標準", high: "高", auto: "AIに任せる" })[quality] || "標準";
 }
 
+function updateMobileMenu(open) {
+  const button = $("#mobile-menu");
+  button.classList.toggle("is-open", open);
+  button.setAttribute("aria-expanded", String(open));
+  button.setAttribute("aria-label", open ? "メニューを閉じる" : "メニューを開く");
+  button.querySelector("span").textContent = open ? "×" : "☰";
+}
+
 function switchView(view) {
   if (state.view === "history" && view !== "history") revokeHistoryObjectUrls();
   state.view = view;
   $$("[data-view-panel]").forEach((panel) => panel.classList.toggle("is-visible", panel.dataset.viewPanel === view));
   $$("[data-view]").forEach((button) => button.classList.toggle("is-active", button.dataset.view === view));
   $("#sidebar").classList.remove("is-open");
-  $("#mobile-menu").setAttribute("aria-expanded", "false");
+  updateMobileMenu(false);
   if (view === "history") void renderHistory();
   if (view === "templates") void renderTemplates();
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -644,7 +652,7 @@ function bindEvents() {
   $$("[data-view]").forEach((button) => button.addEventListener("click", () => switchView(button.dataset.view)));
   $("#mobile-menu").addEventListener("click", () => {
     const open = $("#sidebar").classList.toggle("is-open");
-    $("#mobile-menu").setAttribute("aria-expanded", String(open));
+    updateMobileMenu(open);
   });
   $("#article-form").addEventListener("submit", planArticle);
   $("#article-image").addEventListener("change", async (event) => {

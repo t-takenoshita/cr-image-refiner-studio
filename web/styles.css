@@ -20,7 +20,11 @@ h3 { margin-block-end: var(--space-xs); font-size: var(--text-md); }
 :focus { outline: none; }
 :focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
 
-.mobile-menu { position: fixed; inset-block-start: var(--space-sm); inset-inline-start: var(--space-sm); z-index: 30; display: grid; width: 44px; height: 44px; place-items: center; border: var(--rule-thin) solid var(--color-rule-2); border-radius: var(--radius-sm); background: var(--color-paper); }
+.mobile-menu { position: fixed; inset-block-start: max(.45rem, env(safe-area-inset-top)); inset-inline-start: .45rem; z-index: 30; display: grid; width: 34px; height: 34px; padding: 0; place-items: center; border: var(--rule-thin) solid color-mix(in oklch, var(--color-rule-2) 70%, transparent); border-radius: 50%; background: color-mix(in oklch, var(--color-paper) 82%, transparent); box-shadow: 0 4px 16px color-mix(in oklch, var(--color-ink) 9%, transparent); opacity: .68; backdrop-filter: blur(8px); transition: opacity var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out); }
+.mobile-menu::after { position: absolute; inset: -5px; content: ""; }
+.mobile-menu span { font-size: 1rem; line-height: 1; transform: translateY(-1px); }
+.mobile-menu:focus-visible, .mobile-menu.is-open { background: var(--color-paper); opacity: 1; }
+.mobile-menu:active { transform: scale(.94); }
 .sidebar { position: fixed; z-index: 25; inset-block: 0; inset-inline-start: 0; width: min(18rem, 86vw); padding: var(--space-lg); border-inline-end: var(--rule-thin) solid var(--color-rule); background: var(--color-paper); transform: translateX(-102%); transition: transform var(--dur-base) var(--ease-out); }
 .sidebar.is-open { transform: none; }
 .brand { display: flex; align-items: center; gap: var(--space-sm); min-height: 52px; margin-block-end: var(--space-xl); }
