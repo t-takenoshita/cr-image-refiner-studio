@@ -500,9 +500,9 @@ function initializeMode() {
   const logout = $(".logout-form");
   if (PAGES_MODE) {
     connect.hidden = false;
-    logout.hidden = false;
+    logout.hidden = true;
     $("#runtime-mode-label").textContent = "GitHub Pagesモード";
-    $("#privacy-copy").innerHTML = "<strong>一時保存</strong><br>参考画像は処理開始後、生成結果は12時間後にGitHubから削除します。";
+    $("#privacy-copy").innerHTML = "<strong>暗号化一時保存</strong><br>画像は暗号化して受け渡し、完了通知は12時間後に削除します。";
     updateConnectionUi();
   } else {
     connect.hidden = true;
