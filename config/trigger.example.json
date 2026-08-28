@@ -1,0 +1,47 @@
+{
+  "schema_version": "aicr-trigger-config-v1",
+  "recommended_initial_mode": "initial_draft_runner",
+  "modes": {
+    "initial_draft_runner": {
+      "description": "Reads new Google Form rows, builds prompt pack, and can generate/post only the first draft. Revision generation stays disabled.",
+      "dry_run_command": "npm run initial:draft:dry-run",
+      "execute_command": "node tools/run_initial_draft.mjs --source public-csv --only-new --after-last-posted-row --disable-policy-gate --limit 1 --execute --send-chatwork --guardrails /path/to/local.guardrails.json --openai-env-file /path/to/openai.env --chatwork-env-file /path/to/chatwork.env",
+      "required_guardrails": [
+        "initial_draft_auto_enabled=true",
+        "initial_draft_chatwork_send_enabled=true",
+        "image2_generation_enabled=true",
+        "chatwork_send_enabled=true",
+        "revision_auto_generation_enabled=false",
+        "chatwork_feedback_auto_regenerate_enabled=false"
+      ],
+      "external_actions": {
+        "image_generation": "first_draft_only",
+        "drive_upload": "disabled_initially",
+        "chatwork_send": "first_draft_only",
+        "sheet_write": "disabled_initially"
+      }
+    },
+    "local_poll_dry_run": {
+      "description": "Future option: local scheduler reads the queue periodically and creates prompt packs only. No image generation or posting without human approval.",
+      "minimum_stable_runs_before_enable": 5,
+      "poll_interval_minutes": 15,
+      "external_actions": {
+        "image_generation": "manual_confirm_per_request",
+        "drive_upload": "disabled_initially",
+        "chatwork_send": "disabled_or_approval_only",
+        "sheet_write": "disabled_initially"
+      }
+    },
+    "sheet_status_queue": {
+      "description": "Future option: use Sheet status/locked_at/locked_by as the shared queue once Sheets read/write is stable.",
+      "minimum_stable_runs_before_enable": 10,
+      "lock_columns": ["status", "locked_at", "locked_by"],
+      "external_actions": {
+        "image_generation": "explicit_flag_and_guardrail",
+        "drive_upload": "explicit_flag_and_guardrail",
+        "chatwork_send": "send_flag_guardrail_and_human_review",
+        "sheet_write": "write_flag_guardrail_and_human_review"
+      }
+    }
+  }
+}

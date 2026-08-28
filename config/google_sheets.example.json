@@ -1,0 +1,12 @@
+{
+  "schema_version": "aicr-google-sheets-config-v1",
+  "google_form_response_sheet": {
+    "spreadsheet_url": "https://docs.google.com/spreadsheets/d/1_C66pvuPhjD-ZAsMjniyW117R6MRkxOyNVylMGk3tEE/edit?gid=55285306#gid=55285306",
+    "gid": "55285306",
+    "sheet_name": "",
+    "header_range": "A1:AZ2",
+    "data_range": "A1:AZ500",
+    "service_account_key_file": "/Users/miyekeyuta/Documents/AICR_Factory_data/secrets/google-service-account.json",
+    "readonly": true
+  }
+}

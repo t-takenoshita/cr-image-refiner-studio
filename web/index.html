@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#f7f9ff">
+  <title>CR Image Refiner</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css?v=3">
+</head>
+<body>
+  <button class="mobile-menu" id="mobile-menu" type="button" aria-label="メニューを開く" aria-expanded="false">☰</button>
+  <aside class="sidebar" id="sidebar">
+    <div class="brand"><span class="brand-mark">CR</span><span><strong>Image Refiner</strong><small>Standalone studio</small></span></div>
+    <nav aria-label="メインメニュー">
+      <button class="nav-item is-active" type="button" data-view="article"><span>▣</span>記事画像制作</button>
+      <button class="nav-item" type="button" data-view="free"><span>✦</span>フリー画像生成</button>
+      <button class="nav-item" type="button" data-view="history"><span>◷</span>生成履歴</button>
+      <button class="nav-item" type="button" data-view="templates"><span>▤</span>テンプレート</button>
+    </nav>
+    <div class="sidebar-note"><span class="status-dot"></span><span>Web完結モード<br><small>外部フォーム連携なし</small></span></div>
+  </aside>
+
+  <main class="app-shell" id="app-shell">
+    <section class="view is-visible" data-view-panel="article">
+      <header class="page-head">
+        <div><p class="mono-label">ARTICLE CREATIVE</p><h1>記事画像制作</h1><p>依頼内容を整理し、方向性の異なる画像案を4枚生成します。</p></div>
+        <button class="button button-secondary" id="save-template" type="button">テンプレート保存</button>
+      </header>
+      <ol class="stepper" id="stepper" aria-label="制作進行">
+        <li class="is-current"><span>1</span><b>依頼入力</b></li>
+        <li><span>2</span><b>AI要件化</b></li>
+        <li><span>3</span><b>認識確認</b></li>
+        <li><span>4</span><b>画像生成</b></li>
+        <li><span>5</span><b>記事部確認</b></li>
+        <li><span>6</span><b>採用／修正</b></li>
+      </ol>
+
+      <div class="stage is-visible" data-stage="1">
+        <form class="panel intake-grid" id="article-form">
+          <div class="form-main">
+            <div class="section-heading"><div><span class="step-badge">1</span><h2>依頼内容を入力</h2></div><p>必須項目は3つだけです。</p></div>
+            <div class="field"><label for="article-title">対象記事・案件名 <span class="required-mark" aria-hidden="true">＊</span><span class="visually-hidden">必須</span></label><input id="article-title" name="articleTitle" required placeholder="例：AGAオンライン診療の記事LP"></div>
+            <div class="field"><label for="target-audience">想定ターゲット</label><input id="target-audience" name="targetAudience" placeholder="例：薄毛が気になり始めた30代男性"></div>
+            <div class="field"><label for="problem">何が違う？ <span class="required-mark" aria-hidden="true">＊</span><span class="visually-hidden">必須</span></label><textarea id="problem" name="problem" required placeholder="現状画像で気になる点、変えたい理由"></textarea></div>
+            <div class="field"><label for="direction">どう変えたい？ <span class="required-mark" aria-hidden="true">＊</span><span class="visually-hidden">必須</span></label><textarea id="direction" name="direction" required placeholder="雰囲気、構図、人物、色、広告感など"></textarea></div>
+            <div class="field"><label for="required-copy">画像に必ず入れるコピー</label><textarea id="required-copy" name="requiredCopy" placeholder="未入力なら文字なし画像として設計します"></textarea></div>
+            <div class="field"><label for="offer">オファー・補足</label><input id="offer" name="offer" placeholder="根拠のある価格やキャンペーンだけ入力"></div>
+          </div>
+          <aside class="upload-column">
+            <label class="upload-zone" for="article-image"><input id="article-image" type="file" accept="image/*"><span class="upload-icon">↑</span><strong>対象画像を選択</strong><small>PNG / JPG · 15MB程度まで</small><img id="article-preview" alt="選択画像のプレビュー"></label>
+            <label class="upload-zone compact" for="reference-images"><input id="reference-images" type="file" accept="image/*" multiple><span>＋</span><strong>参考画像を追加</strong><small>最大3枚</small></label>
+            <div class="thumb-row" id="reference-preview"></div>
+            <div class="privacy-note"><span>●</span><p><strong>Web完結型</strong><br>画像は生成時だけAPIへ送信します。Google Forms・Sheets・Chatworkは使いません。</p></div>
+          </aside>
+          <div class="form-actions"><span id="form-error" class="form-message" role="alert"></span><button class="button button-primary" type="submit">AIに要件を整理してもらう →</button></div>
+        </form>
+      </div>
+
+      <div class="stage" data-stage="2"><section class="panel"><div class="section-heading"><div><span class="step-badge">2</span><h2>AI要件化</h2></div><p>AICR Factoryの設計ロジックで4方向に分解しました。</p></div><div class="requirements" id="requirements"></div><div class="variant-list" id="variant-list"></div><div class="panel-actions"><button class="button button-secondary" data-back="1">戻る</button><button class="button button-primary" data-next="3">認識内容を確認する →</button></div></section></div>
+      <div class="stage" data-stage="3"><section class="panel"><div class="section-heading"><div><span class="step-badge">3</span><h2>認識確認</h2></div><p>生成前に依頼と4案の方向性を確認してください。</p></div><div class="review-layout"><div id="review-summary" class="review-summary"></div><div class="comment-box"><label for="marketer-comment">マーターコメント</label><textarea id="marketer-comment" placeholder="修正点があれば入力"></textarea></div></div><div class="panel-actions"><button class="button button-secondary" data-back="2">修正する</button><button class="button button-primary" id="generate-article">この内容で4案生成 →</button></div></section></div>
+      <div class="stage" data-stage="4"><section class="panel generation-state"><div class="spinner" aria-hidden="true"></div><h2>画像を生成しています</h2><p>4つの構図を順番に生成します。数分かかる場合があります。</p><div class="progress"><span id="generation-progress"></span></div><button class="button button-secondary" id="cancel-generation" type="button">画面に戻る</button></section></div>
+      <div class="stage" data-stage="5"><section class="panel"><div class="section-heading"><div><span class="step-badge">5</span><h2>記事部確認</h2></div><p>採用候補を1枚選択してください。</p></div><div class="image-grid" id="article-results"></div><div class="panel-actions"><button class="button button-secondary" data-back="3">条件を見直す</button><button class="button button-primary" id="confirm-selection" disabled>選択案を確認 →</button></div></section></div>
+      <div class="stage" data-stage="6"><section class="panel"><div class="section-heading"><div><span class="step-badge">6</span><h2>採用／修正</h2></div><p>最終画像を保存するか、追加修正へ戻ります。</p></div><div class="final-layout"><div id="final-image"></div><div class="decision-card"><span class="success-mark">✓</span><h3>採用候補を選択しました</h3><label for="final-comment">コメント</label><textarea id="final-comment" placeholder="採用理由や次回の修正メモ"></textarea><button class="button button-primary" id="download-final">画像をダウンロード</button><button class="button button-secondary" id="revise-final">追加で修正依頼をする</button></div></div></section></div>
+    </section>
+
+    <section class="view" data-view-panel="free">
+      <header class="page-head"><div><p class="mono-label">FREE GENERATION</p><h1>フリー画像生成</h1><p>記事案件に紐づけず、自由な指示から画像を作ります。</p></div></header>
+      <section class="panel free-layout">
+        <div class="free-form"><div class="field"><label for="free-prompt">生成したい画像</label><textarea id="free-prompt" class="prompt-large" placeholder="例：自然光の入る白いクリニックで、30代の日本人男性が穏やかにカメラを見る広告写真。文字なし。"></textarea></div><div class="field"><label for="free-count">生成枚数</label><select id="free-count"><option value="1">1枚</option><option value="2">2枚</option><option value="4">4枚</option></select></div><label class="upload-zone compact" for="free-reference"><input id="free-reference" type="file" accept="image/*" multiple><span>＋</span><strong>参考画像を追加</strong><small>任意・最大4枚</small></label><div class="thumb-row" id="free-reference-preview"></div><button class="button button-primary" id="generate-free">画像を生成する →</button><p class="form-message" id="free-error" role="alert"></p></div>
+        <div><div class="empty-canvas" id="free-results"><span>✦</span><h2>生成結果</h2><p>指示を入力すると、ここに画像が表示されます。</p></div></div>
+      </section>
+    </section>
+
+    <section class="view" data-view-panel="history"><header class="page-head"><div><p class="mono-label">LOCAL ARCHIVE</p><h1>生成履歴</h1><p>このブラウザに保存した採用画像を確認できます。</p></div></header><div class="history-grid" id="history-grid"></div></section>
+    <section class="view" data-view-panel="templates"><header class="page-head"><div><p class="mono-label">15 DAY STORAGE</p><h1>テンプレート</h1><p>15日後に自動削除。必要なものは保存期限を更新できます。</p></div></header><div class="template-list" id="template-list"></div></section>
+    <footer class="foot-line"><span>CR Image Refiner</span><span>Standalone Web Studio</span><span>Local-first · AICR prompt engine</span></footer>
+  </main>
+  <script type="module" src="/app.js?v=2"></script>
+</body>
+</html>

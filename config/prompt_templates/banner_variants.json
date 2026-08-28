@@ -1,0 +1,63 @@
+{
+  "schema_version": "aicr-prompt-templates-v2",
+  "mode": "four_variants_with_palette_pool",
+  "color_mode": "palette_pool_deterministic_shuffle",
+  "variants": [
+    {
+      "id": "request_led_direct",
+      "appeal_axis": "request_led",
+      "composition": "request_visual_direct",
+      "color": "配色プールから案ごとに選定",
+      "copy_type": "request_copy_verbatim",
+      "layout": "フォーム指定の訴求軸とビジュアル要素を主役にし、正面性のある直球レイアウトにする",
+      "typography": "フォーム指定の主コピーを最も大きくし、指定されたビジュアルとの視線順を明確にする",
+      "text_contract": "{{strict_text_instruction}}",
+      "text_style_instruction": "{{typography_instruction}}",
+      "photo_treatment": "{{photo_realism_instruction}}",
+      "graphic_elements": "指定ビジュアルを邪魔しない最小限の帯、下線、余白でクリック前理解を強める",
+      "direction": "フォームの訴求軸と入れたいビジュアル要素をそのまま主役にする直球構成。"
+    },
+    {
+      "id": "request_led_scene",
+      "appeal_axis": "request_led",
+      "composition": "request_visual_scene",
+      "color": "配色プールから案ごとに選定",
+      "copy_type": "request_copy_verbatim",
+      "layout": "フォーム指定のビジュアルを自然な生活・利用場面の中で見せ、主コピーとの関係を明確にする",
+      "typography": "フォーム指定の主コピーを大きく保ち、場面の視線を遮らない位置に置く",
+      "text_contract": "{{strict_text_instruction}}",
+      "text_style_instruction": "{{typography_instruction}}",
+      "photo_treatment": "{{photo_realism_instruction}}",
+      "graphic_elements": "指定ビジュアルに合う最小限の面、ラベル、罫線だけを使用する",
+      "direction": "フォーム指定のビジュアル要素を自然な場面として見せる構成。悩み場面へ固定しない。"
+    },
+    {
+      "id": "request_led_closeup",
+      "appeal_axis": "request_led",
+      "composition": "request_visual_closeup",
+      "color": "配色プールから案ごとに選定",
+      "copy_type": "request_copy_verbatim",
+      "layout": "フォーム指定の人物・商品・部位・モチーフのディテールを大きく見せ、主役を1つに絞る",
+      "typography": "指定コピーを大きく読みやすく配置し、ディテールと競合させない",
+      "text_contract": "{{strict_text_instruction}}",
+      "text_style_instruction": "{{typography_instruction}}",
+      "photo_treatment": "{{photo_realism_instruction}}",
+      "graphic_elements": "指定ビジュアルの質感を生かす余白、トリミング、軽い罫線だけを使用する",
+      "direction": "フォーム指定の主役やディテールを大きく見せる構成。BA・施術・比較へ固定しない。"
+    },
+    {
+      "id": "request_led_editorial",
+      "appeal_axis": "request_led",
+      "composition": "request_visual_editorial",
+      "color": "配色プールから案ごとに選定",
+      "copy_type": "request_copy_verbatim",
+      "layout": "フォーム指定の訴求とビジュアルを維持しながら、非対称・雑誌風など編集的な構図で差別化する",
+      "typography": "指定コピーとオファーの階層を保ち、編集的だがスマホで読みやすくする",
+      "text_contract": "{{strict_text_instruction}}",
+      "text_style_instruction": "{{typography_instruction}}",
+      "photo_treatment": "{{photo_realism_instruction}}",
+      "graphic_elements": "指定ビジュアルに合う余白、トリミング、アクセント線を必要最小限に使う",
+      "direction": "フォーム指定の訴求軸とビジュアル要素を維持し、編集的な見せ方で差別化する構成。"
+    }
+  ]
+}

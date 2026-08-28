@@ -1,0 +1,8 @@
+{
+  "date": "2026-08-28",
+  "framework": "vanilla Node.js",
+  "font_stack": "none before build",
+  "palette": "none before build",
+  "motion": "motion-cut",
+  "spacing": "introduced 4pt scale"
+}

@@ -1,0 +1,14 @@
+node_modules/
+.runtime/
+.DS_Store
+.env
+.env.*
+!.env.example
+secrets/
+credentials.json
+google-service-account*.json
+*.service-account.json
+*.log
+tmp/
+coverage/
+AICR_Factory_data/
