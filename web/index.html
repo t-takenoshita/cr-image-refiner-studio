@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=JetBrains+Mono:wght@500;700&family=M+PLUS+1p:wght@400;500;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=9">
+  <link rel="stylesheet" href="./styles.css?v=13">
 </head>
 <body class="pages-auth-checking">
   <div class="pages-auth-shell" id="pages-auth-shell" hidden>
@@ -31,6 +31,7 @@
     <div class="brand"><span class="brand-mark">CR</span><span><strong>Image Refiner</strong><small>Standalone studio</small></span></div>
     <nav aria-label="メインメニュー">
       <button class="nav-item is-active" type="button" data-view="article"><span>▣</span>記事画像制作</button>
+      <button class="nav-item" type="button" data-view="lp"><span>LP</span>LP制作</button>
       <button class="nav-item" type="button" data-view="free"><span>✦</span>フリー画像生成</button>
       <button class="nav-item" type="button" data-view="history"><span>◷</span>生成履歴</button>
       <button class="nav-item" type="button" data-view="templates"><span>▤</span>テンプレート</button>
@@ -91,6 +92,113 @@
       <div class="stage" data-stage="6"><section class="panel"><div class="section-heading"><div><span class="step-badge">6</span><h2>採用／修正</h2></div><p>最終画像を保存するか、追加修正へ戻ります。</p></div><div class="final-layout"><div id="final-image"></div><div class="decision-card"><span class="success-mark">✓</span><h3>採用候補を選択しました</h3><label for="final-comment">コメント</label><textarea id="final-comment" placeholder="採用理由や次回の修正メモ"></textarea><button class="button button-primary" id="download-final">画像をダウンロード</button><button class="button button-secondary" id="revise-final">追加で修正依頼をする</button></div></div></section></div>
     </section>
 
+    <section class="view" data-view-panel="lp">
+      <header class="page-head">
+        <div><p class="mono-label">LANDING PAGE WORKBENCH</p><h1>LP制作</h1><p>構成、コピー、ファーストビュー素材を一つの設計図にまとめます。</p></div>
+        <div class="lp-draft-status" id="lp-draft-status" aria-live="polite"><span aria-hidden="true">●</span>この端末に自動保存</div>
+      </header>
+
+      <form class="lp-workbench" id="lp-form" novalidate>
+        <aside class="lp-work-rail" aria-label="LP制作ツール">
+          <div class="lp-rail-head"><span class="lp-rail-mark">LP</span><div><h2>設計台</h2><p>必要な順に埋める</p></div></div>
+          <nav class="lp-tool-nav" aria-label="LP制作の工程">
+            <button class="lp-tool-tab is-active" type="button" data-lp-tab="brief" aria-controls="lp-panel-brief" aria-selected="true"><span>1</span>商品・目的</button>
+            <button class="lp-tool-tab" type="button" data-lp-tab="copy" aria-controls="lp-panel-copy" aria-selected="false"><span>2</span>コピー</button>
+            <button class="lp-tool-tab" type="button" data-lp-tab="layout" aria-controls="lp-panel-layout" aria-selected="false"><span>3</span>構成</button>
+            <button class="lp-tool-tab" type="button" data-lp-tab="visual" aria-controls="lp-panel-visual" aria-selected="false"><span>4</span>素材</button>
+          </nav>
+          <div class="lp-readiness"><span>設計充足度</span><strong id="lp-readiness-value">0 / 4</strong><div aria-hidden="true"><span id="lp-readiness-bar"></span></div></div>
+          <button class="button button-primary lp-rail-action" id="lp-review" type="button" data-state="default"><span class="lp-button-label">設計を確認</span></button>
+        </aside>
+
+        <div class="lp-editor">
+          <section class="lp-editor-panel" id="lp-panel-brief" data-lp-panel="brief" aria-labelledby="lp-brief-title">
+            <div class="lp-panel-head"><div><h2 id="lp-brief-title">何を、誰に、どう動かすか</h2><p>最初にLPの判断軸だけ固定します。</p></div><span>01</span></div>
+            <div class="field" data-lp-field>
+              <label for="lp-product">商品・サービス名 <span class="required-mark" aria-hidden="true">＊</span><span class="visually-hidden">必須</span></label>
+              <input id="lp-product" name="product" required aria-required="true" aria-describedby="lp-product-help" placeholder="例：オンライン食事指導">
+              <small id="lp-product-help" data-default-copy="固有名が未定なら、商材カテゴリだけでも構いません。">固有名が未定なら、商材カテゴリだけでも構いません。</small>
+            </div>
+            <div class="field" data-lp-field>
+              <label for="lp-target">一番届けたい相手 <span class="required-mark" aria-hidden="true">＊</span><span class="visually-hidden">必須</span></label>
+              <input id="lp-target" name="target" required aria-required="true" aria-describedby="lp-target-help" placeholder="例：外食が多い30代会社員">
+              <small id="lp-target-help" data-default-copy="属性より、今どんなことで困っている人かを書くと精度が上がります。">属性より、今どんなことで困っている人かを書くと精度が上がります。</small>
+            </div>
+            <div class="field" data-lp-field>
+              <label for="lp-promise">LPで約束する変化 <span class="required-mark" aria-hidden="true">＊</span><span class="visually-hidden">必須</span></label>
+              <textarea id="lp-promise" name="promise" required aria-required="true" aria-describedby="lp-promise-help" placeholder="例：忙しくても続けられる食習慣を一緒につくる"></textarea>
+              <small id="lp-promise-help" data-default-copy="未確認の数字や効果は入れず、提供できる変化を一つに絞ります。">未確認の数字や効果は入れず、提供できる変化を一つに絞ります。</small>
+            </div>
+            <div class="field" data-lp-field>
+              <label for="lp-goal">主導線 <span class="required-mark" aria-hidden="true">＊</span><span class="visually-hidden">必須</span></label>
+              <select id="lp-goal" name="goal" required aria-required="true" aria-describedby="lp-goal-help"><option value="">選択してください</option><option value="無料相談を予約">無料相談を予約</option><option value="資料を請求">資料を請求</option><option value="商品を購入">商品を購入</option><option value="体験を申し込む">体験を申し込む</option><option value="問い合わせる">問い合わせる</option></select>
+              <small id="lp-goal-help" data-default-copy="ページ内の主要ボタンは、この行動に揃えます。">ページ内の主要ボタンは、この行動に揃えます。</small>
+            </div>
+          </section>
+
+          <section class="lp-editor-panel" id="lp-panel-copy" data-lp-panel="copy" aria-labelledby="lp-copy-title" hidden>
+            <div class="lp-panel-head"><div><h2 id="lp-copy-title">読者の迷いを言葉にする</h2><p>入力した言葉だけで設計図を組みます。</p></div><span>02</span></div>
+            <div class="field" data-lp-field><label for="lp-problem">今抱えている悩み</label><textarea id="lp-problem" name="problem" aria-describedby="lp-problem-help" placeholder="例：情報が多すぎて、何から始めればよいか分からない"></textarea><small id="lp-problem-help" data-default-copy="読者が自分のことだと思える、具体的な状況を書きます。">読者が自分のことだと思える、具体的な状況を書きます。</small></div>
+            <div class="field" data-lp-field><label for="lp-benefit">選ばれる理由</label><textarea id="lp-benefit" name="benefit" aria-describedby="lp-benefit-help" placeholder="例：毎日の記録を見ながら、管理栄養士が週ごとに調整"></textarea><small id="lp-benefit-help" data-default-copy="機能名ではなく、他との違いが分かる仕組みを入力します。">機能名ではなく、他との違いが分かる仕組みを入力します。</small></div>
+            <div class="field" data-lp-field><label for="lp-proof">使える根拠・実績</label><textarea id="lp-proof" name="proof" aria-describedby="lp-proof-help" placeholder="例：監修者、導入実績、調査結果、利用者の声"></textarea><small id="lp-proof-help" data-default-copy="公開確認できる事実だけを入力。未入力なら設計図に確認枠を残します。">公開確認できる事実だけを入力。未入力なら設計図に確認枠を残します。</small></div>
+            <div class="field" data-lp-field><label for="lp-offer">オファー・条件</label><input id="lp-offer" name="offer" aria-describedby="lp-offer-help" placeholder="例：初回相談無料／対象条件あり"><small id="lp-offer-help" data-default-copy="価格・割引・期間は、確定しているものだけを書きます。">価格・割引・期間は、確定しているものだけを書きます。</small></div>
+            <div class="field" data-lp-field><label for="lp-cta">ボタン文言</label><input id="lp-cta" name="cta" aria-describedby="lp-cta-help" placeholder="例：無料相談の日程を見る"><small id="lp-cta-help" data-default-copy="未入力の場合は、主導線の選択内容を使います。">未入力の場合は、主導線の選択内容を使います。</small></div>
+          </section>
+
+          <section class="lp-editor-panel" id="lp-panel-layout" data-lp-panel="layout" aria-labelledby="lp-layout-title" hidden>
+            <div class="lp-panel-head"><div><h2 id="lp-layout-title">温度と順番を決める</h2><p>トーンはいつでも切り替えられます。</p></div><span>03</span></div>
+            <fieldset class="lp-choice-group">
+              <legend>トーン</legend>
+              <div class="lp-tone-grid">
+                <label class="lp-tone-choice"><input type="radio" name="tone" value="logical" checked><span><b>理詰め</b><small>比較しやすく</small></span></label>
+                <label class="lp-tone-choice"><input type="radio" name="tone" value="trust"><span><b>信頼</b><small>不安を減らす</small></span></label>
+                <label class="lp-tone-choice"><input type="radio" name="tone" value="bold"><span><b>勢い</b><small>決断を促す</small></span></label>
+                <label class="lp-tone-choice"><input type="radio" name="tone" value="luxury"><span><b>上質</b><small>余白で語る</small></span></label>
+                <label class="lp-tone-choice"><input type="radio" name="tone" value="friendly"><span><b>親しみ</b><small>会話の距離</small></span></label>
+                <label class="lp-tone-choice"><input type="radio" name="tone" value="experimental"><span><b>実験的</b><small>型をずらす</small></span></label>
+              </div>
+            </fieldset>
+            <fieldset class="lp-choice-group">
+              <legend>入れるセクション</legend>
+              <div class="lp-section-choices">
+                <label><input type="checkbox" name="sections" value="problem" checked><span>悩み・共感</span></label>
+                <label><input type="checkbox" name="sections" value="solution" checked><span>解決方法</span></label>
+                <label><input type="checkbox" name="sections" value="benefit" checked><span>選ばれる理由</span></label>
+                <label><input type="checkbox" name="sections" value="proof" checked><span>根拠・実績</span></label>
+                <label><input type="checkbox" name="sections" value="flow"><span>利用の流れ</span></label>
+                <label><input type="checkbox" name="sections" value="faq" checked><span>よくある質問</span></label>
+                <label><input type="checkbox" name="sections" value="closing" checked><span>最後の後押し</span></label>
+              </div>
+            </fieldset>
+          </section>
+
+          <section class="lp-editor-panel" id="lp-panel-visual" data-lp-panel="visual" aria-labelledby="lp-visual-title" hidden>
+            <div class="lp-panel-head"><div><h2 id="lp-visual-title">ファーストビュー素材を作る</h2><p>文字はLP側で載せる前提の背景素材です。</p></div><span>04</span></div>
+            <div class="field" data-lp-field><label for="lp-visual-direction">見せたい情景・被写体</label><textarea id="lp-visual-direction" name="visual" aria-describedby="lp-visual-help" placeholder="例：朝のキッチン、自然光、生活感は残しつつ清潔に"></textarea><small id="lp-visual-help" data-default-copy="人物、商品、場所、光、避けたい表現まで書けます。">人物、商品、場所、光、避けたい表現まで書けます。</small></div>
+            <label class="upload-zone compact lp-reference-upload" for="lp-reference"><input id="lp-reference" type="file" accept="image/*"><span>＋</span><strong>参考画像を追加</strong><small id="lp-reference-name">任意・1枚</small></label>
+            <div class="generation-settings-grid lp-generation-settings">
+              <div class="field"><label for="lp-image-size">画像サイズ</label><select id="lp-image-size" name="imageSize"><option value="1536x1024" selected>1536 × 1024（横長）</option><option value="1088x1088">1088 × 1088（正方形）</option><option value="1024x1536">1024 × 1536（縦長）</option><option value="2048x1152">2048 × 1152（2K横長）</option></select></div>
+              <div class="field"><label for="lp-image-quality">品質</label><select id="lp-image-quality" name="imageQuality"><option value="low">低（速い・安い）</option><option value="medium" selected>標準</option><option value="high">高（時間・料金増）</option></select></div>
+            </div>
+            <button class="button button-primary lp-generate-action" id="lp-generate-hero" type="button" data-state="default"><span class="lp-button-label">FV素材を1枚生成</span></button>
+            <p class="form-message" id="lp-visual-error" role="alert"></p>
+          </section>
+        </div>
+
+        <section class="lp-preview" aria-labelledby="lp-preview-title">
+          <header class="lp-preview-head"><div><span>LIVE BLUEPRINT</span><h2 id="lp-preview-title">LP設計図</h2></div><button class="button button-secondary lp-copy-action" id="lp-copy-outline" type="button" data-state="default"><span class="lp-button-label">設計図をコピー</span></button></header>
+          <div class="lp-preview-sheet" id="lp-preview-sheet" data-tone="logical">
+            <div class="lp-preview-hero">
+              <div class="lp-preview-copy"><span id="lp-preview-tone">理詰め</span><h3 id="lp-preview-headline">一番伝えたい約束を入力</h3><p id="lp-preview-sub">商品と届けたい相手を入力すると、ここにファーストビューの骨格が出ます。</p><span class="lp-preview-cta" id="lp-preview-cta">主導線を選択</span></div>
+              <figure class="lp-hero-visual" id="lp-hero-visual"><div><span>FV</span><p>素材を生成すると<br>ここに表示されます</p></div></figure>
+            </div>
+            <div class="lp-preview-flow" id="lp-preview-flow"></div>
+          </div>
+          <footer class="lp-preview-foot"><span id="lp-preview-count">0セクション</span><span>事実未確認の数字は自動で補いません</span></footer>
+        </section>
+      </form>
+    </section>
+
     <section class="view" data-view-panel="free">
       <header class="page-head"><div><p class="mono-label">FREE GENERATION</p><h1>フリー画像生成</h1><p>記事案件に紐づけず、自由な指示から画像を作ります。</p></div></header>
       <section class="panel free-layout">
@@ -121,6 +229,6 @@
     </form>
   </dialog>
   <script type="module" src="./pages-auth.js?v=1"></script>
-  <script type="module" src="./app.js?v=14"></script>
+  <script type="module" src="./app.js?v=16"></script>
 </body>
 </html>

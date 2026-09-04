@@ -34,7 +34,17 @@ const LEGACY_STORAGE = {
 };
 const FIFTEEN_DAYS = 15 * 24 * 60 * 60 * 1000;
 const HISTORY_TTL = 3 * 24 * 60 * 60 * 1000;
+const LP_DRAFT_STORAGE = "crir_lp_draft_v1";
 const PAGES_MODE = isPagesMode();
+
+const LP_TONES = Object.freeze({
+  logical: { label: "理詰め", direction: "情報の優先順位を明確にし、比較しやすい端正な構図" },
+  trust: { label: "信頼", direction: "誇張を避け、安心材料と人物の自然な表情を丁寧に見せる構図" },
+  bold: { label: "勢い", direction: "主役を大きく置き、強いコントラストと短い視線導線で決断を促す構図" },
+  luxury: { label: "上質", direction: "余白と質感を活かし、情報量を絞って品よく見せる構図" },
+  friendly: { label: "親しみ", direction: "生活者の距離感に寄せ、自然光と身近な情景で見せる構図" },
+  experimental: { label: "実験的", direction: "定石から少しずらしたトリミングと編集的な配置で印象を残す構図" }
+});
 
 const state = {
   view: "article",
@@ -50,7 +60,9 @@ const state = {
   historyObjectUrls: [],
   editingTemplateId: null,
   generating: false,
-  generationController: null
+  generationController: null,
+  lpReference: null,
+  lpHeroImage: null
 };
 let pendingTokenRequest = null;
 
@@ -117,6 +129,273 @@ async function setFiles(input, target, max = 4) {
   state[target] = values.filter(Boolean);
   const previewId = target === "freeReferences" ? "#free-reference-preview" : "#reference-preview";
   $(previewId).innerHTML = state[target].map((src) => `<img src="${src}" alt="参考画像">`).join("");
+}
+
+function getLpFormData() {
+  const form = $("#lp-form");
+  const checkedTone = $("input[name='tone']:checked", form);
+  return {
+    product: $("#lp-product").value.trim(),
+    target: $("#lp-target").value.trim(),
+    promise: $("#lp-promise").value.trim(),
+    goal: $("#lp-goal").value,
+    problem: $("#lp-problem").value.trim(),
+    benefit: $("#lp-benefit").value.trim(),
+    proof: $("#lp-proof").value.trim(),
+    offer: $("#lp-offer").value.trim(),
+    cta: $("#lp-cta").value.trim(),
+    tone: checkedTone?.value || "logical",
+    sections: $$('input[name="sections"]:checked', form).map((input) => input.value),
+    visual: $("#lp-visual-direction").value.trim(),
+    imageSize: $("#lp-image-size").value,
+    imageQuality: $("#lp-image-quality").value
+  };
+}
+
+function buildLpSections(data) {
+  const definitions = {
+    problem: ["悩み・共感", data.problem || "読者が抱える具体的な悩みを入力"],
+    solution: ["解決方法", data.promise || "商品が悩みを解く仕組みを入力"],
+    benefit: ["選ばれる理由", data.benefit || "比較したときに選ばれる理由を入力"],
+    proof: ["根拠・実績", data.proof || "実績・監修・レビューなど、確認できる根拠を追加"],
+    flow: ["利用の流れ", data.goal ? `${data.goal}までの手順と所要時間を整理` : "申し込みから利用までの手順を整理"],
+    faq: ["よくある質問", "購入や申し込みを止める不安を、質問と回答で解消"],
+    closing: ["最後の後押し", data.offer || `主導線「${data.cta || data.goal || "未選択"}」へ進む前の不安を解消`]
+  };
+  return data.sections.map((key) => ({ key, title: definitions[key][0], body: definitions[key][1], pending: !data[key] && ["problem", "benefit", "proof"].includes(key) }));
+}
+
+function saveLpDraft(data) {
+  try {
+    localStorage.setItem(LP_DRAFT_STORAGE, JSON.stringify(data));
+    $("#lp-draft-status").innerHTML = '<span aria-hidden="true">●</span>下書き保存済み';
+  } catch {
+    $("#lp-draft-status").innerHTML = '<span aria-hidden="true">!</span>下書きを保存できません';
+  }
+}
+
+function restoreLpDraft() {
+  let draft;
+  try { draft = JSON.parse(localStorage.getItem(LP_DRAFT_STORAGE)); }
+  catch { draft = null; }
+  if (!draft || typeof draft !== "object") {
+    renderLpBlueprint();
+    return;
+  }
+
+  const fieldIds = {
+    product: "#lp-product",
+    target: "#lp-target",
+    promise: "#lp-promise",
+    goal: "#lp-goal",
+    problem: "#lp-problem",
+    benefit: "#lp-benefit",
+    proof: "#lp-proof",
+    offer: "#lp-offer",
+    cta: "#lp-cta",
+    visual: "#lp-visual-direction",
+    imageSize: "#lp-image-size",
+    imageQuality: "#lp-image-quality"
+  };
+  Object.entries(fieldIds).forEach(([key, selector]) => {
+    if (typeof draft[key] === "string" && $(selector)) $(selector).value = draft[key];
+  });
+  if (LP_TONES[draft.tone]) {
+    const tone = $(`input[name="tone"][value="${draft.tone}"]`);
+    if (tone) tone.checked = true;
+  }
+  if (Array.isArray(draft.sections)) {
+    $$('input[name="sections"]').forEach((input) => { input.checked = draft.sections.includes(input.value); });
+  }
+  $("#lp-draft-status").innerHTML = '<span aria-hidden="true">●</span>下書きを復元';
+  renderLpBlueprint();
+}
+
+function renderLpBlueprint() {
+  const data = getLpFormData();
+  const tone = LP_TONES[data.tone] || LP_TONES.logical;
+  const sections = buildLpSections(data);
+  const ready = [data.product, data.target, data.promise, data.goal].filter(Boolean).length;
+  const cta = data.cta || data.goal || "主導線を選択";
+  let subcopy = "商品と届けたい相手を入力すると、ここにファーストビューの骨格が出ます。";
+  if (data.product && data.target) subcopy = `${data.target}に向けて、${data.product}の価値がひと目で伝わる導入。`;
+  else if (data.product) subcopy = `${data.product}を誰に届けるか入力してください。`;
+  else if (data.target) subcopy = `${data.target}に届ける商品・サービスを入力してください。`;
+
+  $("#lp-preview-sheet").dataset.tone = data.tone;
+  $("#lp-preview-tone").textContent = tone.label;
+  $("#lp-preview-headline").textContent = data.promise || "一番伝えたい約束を入力";
+  $("#lp-preview-sub").textContent = subcopy;
+  $("#lp-preview-cta").textContent = cta;
+  $("#lp-readiness-value").textContent = `${ready} / 4`;
+  $("#lp-readiness-bar").style.setProperty("--lp-progress", String(ready / 4));
+  $("#lp-preview-count").textContent = `${sections.length + 1}セクション`;
+  $("#lp-preview-flow").innerHTML = sections.map((section, index) => `<article class="lp-flow-item ${section.pending ? "is-pending" : ""}"><span class="lp-flow-index">${String(index + 2).padStart(2, "0")}</span><div><h3>${escapeHtml(section.title)}</h3><p>${escapeHtml(section.body)}</p></div></article>`).join("");
+}
+
+function setLpTool(tabName) {
+  $$("[data-lp-tab]").forEach((button) => {
+    const active = button.dataset.lpTab === tabName;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-selected", String(active));
+  });
+  $$("[data-lp-panel]").forEach((panel) => { panel.hidden = panel.dataset.lpPanel !== tabName; });
+}
+
+function validateLpField(field) {
+  const wrapper = field.closest("[data-lp-field]");
+  if (!wrapper) return true;
+  const helper = field.getAttribute("aria-describedby") ? $(`#${field.getAttribute("aria-describedby")}`) : null;
+  const valid = !field.required || Boolean(field.value.trim());
+  field.setAttribute("aria-invalid", String(!valid));
+  wrapper.dataset.state = valid && field.value.trim() ? "success" : valid ? "default" : "error";
+  if (helper) {
+    helper.textContent = valid
+      ? helper.dataset.defaultCopy || ""
+      : field.tagName === "SELECT"
+        ? "主導線が未選択です。LPで一番促す行動を選んでください。"
+        : `${field.labels?.[0]?.textContent.replace("＊", "").replace("必須", "").trim() || "この項目"}が未入力です。内容を入力してください。`;
+  }
+  return valid;
+}
+
+function setLpActionState(button, status, label) {
+  button.dataset.state = status;
+  button.querySelector(".lp-button-label").textContent = label;
+}
+
+function resetLpAction(button, label, delay = 1800) {
+  window.setTimeout(() => setLpActionState(button, "default", label), delay);
+}
+
+function reviewLpDesign() {
+  const required = $$("#lp-form [required]");
+  required.forEach((field) => { field.dataset.touched = "true"; });
+  const invalid = required.filter((field) => !validateLpField(field));
+  const button = $("#lp-review");
+  if (invalid.length) {
+    const panel = invalid[0].closest("[data-lp-panel]");
+    if (panel) setLpTool(panel.dataset.lpPanel);
+    setLpActionState(button, "error", "未入力を確認");
+    invalid[0].focus({ preventScroll: true });
+    invalid[0].scrollIntoView({ block: "center", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    resetLpAction(button, "設計を確認");
+    return;
+  }
+
+  renderLpBlueprint();
+  saveLpDraft(getLpFormData());
+  setLpActionState(button, "success", "設計を更新済み");
+  $(".lp-preview").scrollIntoView?.({ block: "start", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  resetLpAction(button, "設計を確認");
+}
+
+function lpOutlineText(data) {
+  const tone = LP_TONES[data.tone] || LP_TONES.logical;
+  const sections = buildLpSections(data);
+  return [
+    `LP設計図：${data.product || "商品・サービス未入力"}`,
+    `ターゲット：${data.target || "未入力"}`,
+    `約束する変化：${data.promise || "未入力"}`,
+    `主導線：${data.cta || data.goal || "未選択"}`,
+    `トーン：${tone.label}`,
+    "",
+    "01 ファーストビュー",
+    `見出し：${data.promise || "要入力"}`,
+    `補足：${data.target && data.product ? `${data.target}に向けて、${data.product}の価値を伝える` : "要入力"}`,
+    ...sections.flatMap((section, index) => ["", `${String(index + 2).padStart(2, "0")} ${section.title}`, section.body]),
+    "",
+    `素材方向：${data.visual || "未入力"}`,
+    "注：事実未確認の数字は使用しない"
+  ].join("\n");
+}
+
+async function copyLpOutline() {
+  const button = $("#lp-copy-outline");
+  setLpActionState(button, "loading", "コピー中");
+  try {
+    await navigator.clipboard.writeText(lpOutlineText(getLpFormData()));
+    setLpActionState(button, "success", "コピー済み");
+  } catch {
+    setLpActionState(button, "error", "コピーできません");
+  }
+  resetLpAction(button, "設計図をコピー", 2500);
+}
+
+async function saveLpHeroHistory(image, title) {
+  const response = await fetch(image.dataUrl);
+  if (!response.ok) throw new Error("生成画像を読み込めませんでした。");
+  const now = Date.now();
+  await saveHistoryEntry({
+    id: image.id || crypto.randomUUID(),
+    blob: await response.blob(),
+    title: `${title || "LP"}・FV素材`,
+    createdAt: now,
+    expiresAt: now + HISTORY_TTL
+  });
+  await trimHistoryEntries(20);
+}
+
+async function generateLpHero() {
+  const data = getLpFormData();
+  const required = [$("#lp-product"), $("#lp-target"), $("#lp-promise")];
+  const invalid = required.filter((field) => {
+    field.dataset.touched = "true";
+    return !validateLpField(field);
+  });
+  const button = $("#lp-generate-hero");
+  const error = $("#lp-visual-error");
+  error.textContent = "";
+  if (invalid.length) {
+    setLpTool("brief");
+    setLpActionState(button, "error", "基本情報を確認");
+    resetLpAction(button, "FV素材を1枚生成");
+    return;
+  }
+
+  const tone = LP_TONES[data.tone] || LP_TONES.logical;
+  const prompt = [
+    "ランディングページのファーストビューに使う横長の背景素材を1枚生成してください。",
+    `商品・サービス: ${data.product}`,
+    `想定する閲覧者: ${data.target}`,
+    `ページで伝える変化: ${data.promise}`,
+    `トーンと構図: ${tone.direction}`,
+    `見せたい情景・被写体: ${data.visual || "商品・サービスの内容が直感的に伝わる自然な情景"}`,
+    "文字、記号、架空ロゴは一切入れない。コピーを重ねる余白を画面左側に確保する。過度に左右対称な構図と均質なAI風ライティングは避ける。"
+  ].join("\n");
+
+  button.disabled = true;
+  setLpActionState(button, "loading", "FV素材を生成中");
+  $("#lp-hero-visual").innerHTML = '<div><span>FV</span><p>背景素材を生成しています</p></div>';
+  try {
+    state.generationController = new AbortController();
+    const result = PAGES_MODE
+      ? await runPagesJob(
+          "free",
+          { prompt, count: 1, generationConfig: { size: data.imageSize, quality: data.imageQuality } },
+          state.lpReference ? [state.lpReference] : [],
+          ({ message }) => { $("#lp-hero-visual").innerHTML = `<div><span>FV</span><p>${escapeHtml(message)}</p></div>`; }
+        )
+      : await api("/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt, references: state.lpReference ? [state.lpReference] : [], count: 1, generationConfig: { size: data.imageSize, quality: data.imageQuality } })
+        });
+    const image = result.images[0];
+    state.lpHeroImage = image;
+    const [width, height] = data.imageSize.split("x").map(Number);
+    $("#lp-hero-visual").innerHTML = `<img src="${image.dataUrl}" alt="${escapeHtml(data.product)}のLP用ファーストビュー素材" width="${width || 1536}" height="${height || 1024}">`;
+    await saveLpHeroHistory(image, data.product);
+    setLpActionState(button, "success", "生成して履歴に保存");
+  } catch (cause) {
+    error.textContent = `FV素材を生成できませんでした。${cause.message} 設定を確認して再試行してください。`;
+    $("#lp-hero-visual").innerHTML = '<div><span>!</span><p>素材を生成できませんでした</p></div>';
+    setLpActionState(button, "error", "もう一度生成");
+  } finally {
+    state.generationController = null;
+    button.disabled = false;
+    if (button.dataset.state === "success") resetLpAction(button, "FV素材を1枚生成", 2500);
+  }
 }
 
 function getFormData() {
@@ -650,6 +929,28 @@ async function generateFree() {
 
 function bindEvents() {
   $$("[data-view]").forEach((button) => button.addEventListener("click", () => switchView(button.dataset.view)));
+  $$("[data-lp-tab]").forEach((button) => button.addEventListener("click", () => setLpTool(button.dataset.lpTab)));
+  $("#lp-form").addEventListener("input", (event) => {
+    const field = event.target.closest("input, textarea, select");
+    if (field?.dataset.touched) validateLpField(field);
+    renderLpBlueprint();
+    saveLpDraft(getLpFormData());
+  });
+  $("#lp-form").addEventListener("focusout", (event) => {
+    const field = event.target.closest("[data-lp-field] input, [data-lp-field] textarea, [data-lp-field] select");
+    if (!field) return;
+    field.dataset.touched = "true";
+    validateLpField(field);
+  });
+  $("#lp-review").addEventListener("click", reviewLpDesign);
+  $("#lp-copy-outline").addEventListener("click", copyLpOutline);
+  $("#lp-generate-hero").addEventListener("click", generateLpHero);
+  $("#lp-reference").addEventListener("change", async (event) => {
+    const file = event.target.files[0];
+    state.lpReference = await fileToDataUrl(file);
+    $("#lp-reference-name").textContent = file ? file.name : "任意・1枚";
+    event.target.closest(".upload-zone").classList.toggle("has-reference", Boolean(file));
+  });
   $("#mobile-menu").addEventListener("click", () => {
     const open = $("#sidebar").classList.toggle("is-open");
     updateMobileMenu(open);
@@ -737,6 +1038,7 @@ async function initializeBrowserDatabase() {
 }
 
 initializeMode();
+restoreLpDraft();
 bindEvents();
 initializeBrowserDatabase().catch((cause) => console.error("[IndexedDB]", cause.message));
 window.addEventListener("crir:pages-authenticated", () => void restoreGithubConnection());

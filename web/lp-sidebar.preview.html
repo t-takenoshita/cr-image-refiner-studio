@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>LP制作サイドバー — 8 states</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=JetBrains+Mono:wght@500;700&family=M+PLUS+1p:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css?v=13">
+  <style>
+    .component-preview { max-width: 72rem; margin-inline: auto; padding: clamp(var(--space-md), 4vw, var(--space-2xl)); }
+    .component-preview > header { margin-block-end: var(--space-xl); }
+    .component-preview > header p { max-width: 60ch; }
+    .state-board { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-lg); }
+    .state-card { padding: var(--space-lg); border: var(--rule-thin) solid var(--color-ink); background: var(--color-surface); box-shadow: var(--shadow-sm); }
+    .state-card h2 { margin-block-end: var(--space-lg); }
+    .state-row { display: grid; grid-template-columns: minmax(5rem, .35fr) minmax(0, 1fr); gap: var(--space-md); align-items: center; padding-block: var(--space-sm); border-block-end: var(--rule-thin) solid var(--color-rule); }
+    .state-row:last-child { border-block-end: 0; }
+    .state-label { font: 700 var(--text-xs)/1.2 var(--font-body); }
+    .state-row .field { margin: 0; }
+    @media (min-width: 48rem) { .state-board { grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); } }
+    @media (max-width: 30rem) { .state-row { grid-template-columns: minmax(0, 1fr); } }
+  </style>
+</head>
+<body>
+  <main class="component-preview">
+    <header><p class="mono-label">HALLMARK COMPONENT PREVIEW</p><h1>LP制作サイドバー</h1><p>工程タブと入力欄の8状態を一度に確認するための開発用ページです。</p></header>
+    <div class="state-board">
+      <section class="state-card" aria-labelledby="tab-states-title">
+        <h2 id="tab-states-title">工程タブ</h2>
+        <div class="state-row"><span class="state-label">default</span><button class="lp-tool-tab" type="button"><span>1</span>商品・目的</button></div>
+        <div class="state-row"><span class="state-label">hover</span><button class="lp-tool-tab is-hover" type="button"><span>1</span>商品・目的</button></div>
+        <div class="state-row"><span class="state-label">focus</span><button class="lp-tool-tab is-focus" type="button"><span>1</span>商品・目的</button></div>
+        <div class="state-row"><span class="state-label">active</span><button class="lp-tool-tab is-pressed" type="button"><span>1</span>商品・目的</button></div>
+        <div class="state-row"><span class="state-label">disabled</span><button class="lp-tool-tab" type="button" disabled><span>1</span>商品・目的</button></div>
+        <div class="state-row"><span class="state-label">loading</span><button class="lp-tool-tab" type="button" data-state="loading"><span>1</span>商品・目的</button></div>
+        <div class="state-row"><span class="state-label">error</span><button class="lp-tool-tab" type="button" data-state="error"><span>1</span>商品・目的</button></div>
+        <div class="state-row"><span class="state-label">success</span><button class="lp-tool-tab" type="button" data-state="success"><span>1</span>商品・目的</button></div>
+      </section>
+      <section class="state-card lp-editor-panel" aria-labelledby="field-states-title">
+        <h2 id="field-states-title">入力欄</h2>
+        <div class="state-row"><span class="state-label">default</span><div class="field" data-lp-field><label for="state-default">商品名</label><input id="state-default" placeholder="商材カテゴリでも可"><small>入力待ちです。</small></div></div>
+        <div class="state-row"><span class="state-label">hover</span><div class="field is-hover" data-lp-field><label for="state-hover">商品名</label><input id="state-hover" placeholder="商材カテゴリでも可"><small>背景色で操作可能と示します。</small></div></div>
+        <div class="state-row"><span class="state-label">focus</span><div class="field is-focus" data-lp-field><label for="state-focus">商品名</label><input id="state-focus" value="オンライン食事指導"><small>フォーカスリングは即時表示です。</small></div></div>
+        <div class="state-row"><span class="state-label">active</span><div class="field is-active" data-lp-field><label for="state-active">商品名</label><input id="state-active" value="オンライン食事指導"><small>入力中はフォーカス状態を維持します。</small></div></div>
+        <div class="state-row"><span class="state-label">disabled</span><div class="field" data-lp-field data-state="disabled"><label for="state-disabled">商品名</label><input id="state-disabled" value="編集できません" disabled><small>この項目は現在編集できません。</small></div></div>
+        <div class="state-row"><span class="state-label">loading</span><div class="field" data-lp-field data-state="loading"><label for="state-loading">商品名</label><input id="state-loading" value="候補を確認中"><small>入力内容を確認しています。</small></div></div>
+        <div class="state-row"><span class="state-label">error</span><div class="field" data-lp-field data-state="error"><label for="state-error">商品名</label><input id="state-error" aria-invalid="true" aria-describedby="state-error-help"><small id="state-error-help">商品名が未入力です。内容を入力してください。</small></div></div>
+        <div class="state-row"><span class="state-label">success</span><div class="field" data-lp-field data-state="success"><label for="state-success">商品名</label><input id="state-success" value="オンライン食事指導"><small>入力済みです。</small></div></div>
+      </section>
+    </div>
+  </main>
+</body>
+</html>
