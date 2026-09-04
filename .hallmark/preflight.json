@@ -1,0 +1,13 @@
+{
+  "date": "2026-09-04",
+  "scope": "page-redesign",
+  "project": "CR Image Refiner",
+  "source": "local dashbordv2 (user-owned local reference)",
+  "preserve": ["routes", "forms", "workflow state", "storage", "GitHub Actions integration"],
+  "macrostructure": "Workbench",
+  "navigation": "N3 Side-rail",
+  "footer": "Ft2 inline rule",
+  "theme": "custom Punchcard",
+  "tone": "neo-brutalist",
+  "responsiveWidths": [320, 375, 414, 768, 1440]
+}
